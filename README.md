@@ -2,7 +2,7 @@
 
 # Nota Aberta
 
-**A calculadora oficial da Reforma Tributária, com tela, API e MCP. Grátis e aberta.**
+**Nota fiscal de serviço grátis e a calculadora oficial da Reforma Tributária, com tela, API e MCP. Aberta.**
 
 CBS · IBS estadual · IBS municipal · Imposto Seletivo (LC 214/2025)
 
@@ -19,8 +19,8 @@ Em novembro de 2026 a Receita Federal abriu, sob licença MIT, o código da calc
 Ela veio como uma API Java para programador. **A Nota Aberta coloca uma tela, uma API pública e um servidor MCP em
 volta desse motor, sem mudar uma linha da conta.** O número que sai daqui é o número da Receita.
 
-O próximo passo é a **emissão de NFS-e** (nota de serviço nacional) com o certificado do próprio emitente.
-Veja o [roteiro](#roteiro).
+E emite **NFS-e nacional** (nota de serviço) com o certificado A1 do próprio emitente: login com Google, certificado
+cifrado, cota por plano, PDF oficial (o DANFSe que a Receita também abriu), API e MCP. Veja o [roteiro](#roteiro).
 
 ## O que tem hoje
 
@@ -30,7 +30,9 @@ Veja o [roteiro](#roteiro).
 | 🔌 **API REST** | a mesma API da Receita em `/api`, com Swagger. Rotas de cálculo e de dados abertos; teto por IP; CORS aberto |
 | 🤖 **MCP** | `calcular_cbs_ibs`, `tabelas_cbs_ibs`, `aliquotas_referencia` e `versao_motor` em `POST /mcp`, só leitura |
 | ✅ **Mesmo número da Receita** | o motor é compilado do commit registrado na Portaria Cotec 342/2026, e um teste falha se o commit mudar sem paridade nova |
-| 🔒 **Nada guardado** | o que você digita não é gravado; o motor abre a base de tabelas só em leitura |
+| 🧾 **Emissor de NFS-e** | DPS do padrão nacional (produção 1.01 e produção restrita 1.02), assinatura RSA-SHA256, envio à Sefin Nacional com o A1 só em memória, pedido repetido nunca duplica |
+| 🔐 **Certificado cifrado** | AES-256-GCM com uma chave por empresa, embrulhada por uma chave mestra fora do banco; apaga quando quiser |
+| 📄 **PDF oficial** | DANFSe Service da Receita (Go) ao lado do motor |
 
 ## Rodar em um minuto
 
@@ -98,16 +100,17 @@ seria uma segunda cópia da regra fiscal, e ela divergiria da oficial na primeir
 
 - [x] Calculadora pública com o motor oficial (Regime Regular 1.6.1)
 - [x] API e MCP
+- [x] DANFSe: PDF oficial da NFS-e a partir do XML (serviço em Go da Receita, ~0,3 s por nota)
+- [x] Emissor de NFS-e nacional: contas com Google, certificado cifrado, cota, painel, API e MCP
+- [ ] Primeira nota aceita pela Sefin em produção restrita com certificado real (tudo hoje é testado contra um governo falso)
 - [ ] Simples Nacional (motor 0.0.6 da Receita: já compila e sobe com a mesma base)
-- [ ] DANFSe: PDF oficial da NFS-e a partir do XML (serviço em Go da Receita: já medido, ~0,3 s por nota)
-- [ ] **Emissão de NFS-e nacional** com o certificado A1 do emitente, guardado cifrado, primeiro em produção
-      restrita (sem valor fiscal), depois produção. Base: `nfelib` 3.3 (MIT), que já traz o cliente da API nacional
+- [ ] Cancelar e substituir nota pela tela (o XML do cancelamento já existe em `dps.py`)
 - [ ] Conferência em lote: suba as notas do seu sistema e veja onde o cálculo diverge do oficial
 
 ## Testes
 
 ```bash
-python3 -m pytest -q tests/                                         # porta e MCP, contra um motor falso
+pip install cryptography lxml && python3 -m pytest -q tests/       # 70 testes, governo e motor falsos
 RTC_MOTOR_REAL=http://127.0.0.1:8081 python3 -m pytest -q tests/    # paridade com o motor oficial rodando
 ```
 

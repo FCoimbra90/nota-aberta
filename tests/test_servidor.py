@@ -129,7 +129,8 @@ def test_health_responde_503_quando_o_motor_esta_fora(monkeypatch):
 
 def test_pagina_tem_csp_e_estatico_nao_escapa_da_pasta_web(porta):
     st, corpo, cab = _req(porta + "/")
-    assert st == 200 and b"Calculadora de CBS e IBS" in corpo
+    assert st == 200 and "Nota fiscal de serviço de graça".encode() in corpo
+    assert b"Calculadora de CBS e IBS" in _req(porta + "/calculadora.html")[1]
     assert "script-src 'self'" in cab["Content-Security-Policy"]
     assert _req(porta + "/../servidor.py")[0] == 404
     assert _req(porta + "/servidor.py")[0] == 404
@@ -172,11 +173,12 @@ def _rpc(url, corpo):
     return st, (json.loads(dados) if dados else None)
 
 
-def test_mcp_lista_as_quatro_ferramentas_so_de_leitura(porta):
+def test_mcp_lista_calculo_so_leitura_e_emissao_marcada_como_escrita(porta):
     st, r = _rpc(porta, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
-    nomes = {f["name"] for f in r["result"]["tools"]}
-    assert st == 200 and nomes == {"calcular_cbs_ibs", "tabelas_cbs_ibs", "aliquotas_referencia", "versao_motor"}
-    assert all(f["annotations"]["readOnlyHint"] for f in r["result"]["tools"])
+    ferramentas = {f["name"]: f["annotations"]["readOnlyHint"] for f in r["result"]["tools"]}
+    assert st == 200 and ferramentas == {"calcular_cbs_ibs": True, "tabelas_cbs_ibs": True, "aliquotas_referencia": True,
+                                         "versao_motor": True, "listar_empresas": True, "emitir_nfse": False,
+                                         "listar_notas": True}
 
 
 def test_mcp_calcular_repassa_a_operacao_ao_motor_oficial_sem_mexer(porta):

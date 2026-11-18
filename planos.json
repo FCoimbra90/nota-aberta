@@ -1,0 +1,14 @@
+{
+  "_doc": "Planos da Nota Aberta. Preço de lançamento (17/11/2026), a validar com uso medido. Mudar preço ou cota é mudar este arquivo; o código não tem número de plano. `link_pagar` é o id do link mensal no Genesis Pagar (pagar.genesisinnovation.io/p/<id>), criado uma vez com teste_dias 30; vazio = plano ainda sem cobrança ligada (o botão some).",
+  "planos": [
+    {"id": "gratis", "nome": "Grátis", "preco_mes": 0, "notas_mes": 20, "empresas": 1, "api": true,
+     "destaques": ["20 notas de serviço por mês", "1 empresa (CNPJ)", "Calculadora de CBS e IBS sem limite", "API e MCP"],
+     "link_pagar": ""},
+    {"id": "profissional", "nome": "Profissional", "preco_mes": 29, "notas_mes": 300, "empresas": 3, "api": true,
+     "destaques": ["300 notas por mês", "até 3 empresas", "API e MCP para o seu sistema", "30 dias grátis, sem cartão"],
+     "link_pagar": ""},
+    {"id": "empresa", "nome": "Empresa", "preco_mes": 99, "notas_mes": 3000, "empresas": 20, "api": true,
+     "destaques": ["3.000 notas por mês", "até 20 empresas", "para contador e software house", "30 dias grátis, sem cartão"],
+     "link_pagar": ""}
+  ]
+}

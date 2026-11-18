@@ -29,19 +29,33 @@ RUN mkdir -p /tmp/x /src/native && cd /tmp/x \
  && jar xf /src/motor.jar "$LIB" && jar xf "$LIB" "org/sqlite/native/Linux/$(uname -m)/libsqlitejdbc.so" \
  && cp "org/sqlite/native/Linux/$(uname -m)/libsqlitejdbc.so" /src/native/ && rm -rf /tmp/x
 
+# 2º motor: DANFSe Service da Receita (Go, MIT), commit registrado na Portaria Cotec 342/2026 (art. 2º, § 1º, III, b).
+# Gera o PDF oficial da NFS-e a partir do XML. Compila estático (CGO_ENABLED=0) e roda ao lado, em 127.0.0.1:8093.
+FROM golang:1.27.1@sha256:162be5298a40ed317005c8339c6de4d10d3eef336d66dc8e9259b03ab9d3a6d2 AS danfse
+ARG DANFSE_REPO=https://github.com/ReceitaFederal/calculadora-rtc-gerador-danfse.git
+ARG DANFSE_COMMIT=8d79e6b2f7fad6375340afcb51c85ed370c64a14
+WORKDIR /src
+RUN git init -q . && git remote add origin "$DANFSE_REPO" \
+ && git fetch -q --depth 1 origin "$DANFSE_COMMIT" && git checkout -q FETCH_HEAD \
+ && test "$(git rev-parse HEAD)" = "$DANFSE_COMMIT" \
+ && CGO_ENABLED=0 go build -o /src/danfse-service ./cmd/danfse
+
 FROM eclipse-temurin:21-jre-noble@sha256:0d57a8e90c2bb844c5a8e1b2b71e11eff06dad7edcfd803cd21ed4ae203b2515
-RUN apt-get update && apt-get install -y --no-install-recommends python3 \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv tzdata \
  && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt /tmp/requirements.txt
+RUN python3 -m venv /venv && /venv/bin/pip install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PORT=8080 \
-    RTC_JAR=/rtc/motor.jar RTC_DIR=/rtc \
+    RTC_JAR=/rtc/motor.jar RTC_DIR=/rtc RTC_DANFSE=/rtc/danfse-service TZ=America/Sao_Paulo \
     RTC_JAVA_OPTS="-XX:+UseSerialGC -Xmx160m -Xss512k -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=48m -XX:TieredStopAtLevel=1 -Djava.io.tmpdir=/tmp -Dorg.sqlite.lib.path=/rtc/native -Dorg.sqlite.lib.name=libsqlitejdbc.so"
 COPY --from=motor /src/motor.jar /rtc/motor.jar
 COPY --from=motor /src/calculadora/db/calculadora-pro.db /rtc/calculadora/db/calculadora-pro.db
 COPY --from=motor /src/native/libsqlitejdbc.so /rtc/native/libsqlitejdbc.so
 COPY --from=motor /src/LICENSE /rtc/LICENSE-receita-federal
+COPY --from=danfse /src/danfse-service /rtc/danfse-service
 WORKDIR /app
-COPY servidor.py mcp.py sistema.json ./
+COPY *.py planos.json sistema.json ./
 COPY web ./web
 USER 10001
 EXPOSE 8080
-CMD ["python3", "servidor.py"]
+CMD ["/venv/bin/python", "servidor.py"]

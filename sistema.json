@@ -2,16 +2,22 @@
   "nome": "nota-aberta",
   "tipo": "web",
   "molde": "sistema-web",
-  "descricao": "Nota Aberta: calculadora grátis de CBS e IBS (LC 214/2025) com o motor oficial da Receita Federal, sem alteração; página, API e MCP; MIT. Emissão de NFS-e a seguir.",
+  "descricao": "Nota Aberta: NFS-e nacional grátis com o certificado A1 do cliente (cifrado), calculadora oficial de CBS e IBS e DANFSe da Receita, painel, API e MCP; MIT.",
   "titular": "genesis",
   "conectores": [],
   "host": "reforma.genesisinnovation.io",
   "escala_zero": false,
-  "volume_gi": 0,
+  "volume_gi": 1,
   "criado_em": "2026-11-17",
   "porta": 8080,
-  "memoria_limite_mi": 640,
+  "memoria_limite_mi": 704,
   "tmp_mi": 64,
   "cpu_limite_m": 1000,
-  "partida_segundos": 120
+  "partida_segundos": 120,
+  "egresso_https": true,
+  "env": {
+    "NOTA_DB": "/data/nota.db",
+    "NOTA_BASE_URL": "https://reforma.genesisinnovation.io",
+    "PAGAR_URL": "https://pagar.genesisinnovation.io"
+  }
 }

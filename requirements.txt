@@ -1,0 +1,3 @@
+# Única dependência fora da biblioteca padrão: PKCS#12, X.509, AES-GCM e RSA do cofre, do certificado e da assinatura.
+# O python3-cryptography do Ubuntu 24.04 é a 41, sem not_valid_after_utc (pedido desde a 42): por isso vem do PyPI.
+cryptography==50.0.1

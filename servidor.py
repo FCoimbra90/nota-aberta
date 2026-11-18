@@ -90,6 +90,19 @@ class Teto:
 
 
 TETO = Teto(TETO_POR_MINUTO)
+CONTA = None  # conta_web.Conta quando o servidor tem banco e segredo (montar_conta); sem eles, só a calculadora
+ROTAS_CONTA = ("/entrar/", "/sair", "/conta/")
+
+
+def montar_conta(env: dict | None = None):
+    """A conta só sobe com `NOTA_DB` (arquivo SQLite no disco persistente) e `NOTA_SEGREDO_SESSAO` (32+ bytes)."""
+    env = env if env is not None else os.environ
+    if not env.get("NOTA_DB") or len(env.get("NOTA_SEGREDO_SESSAO", "")) < 32:
+        return None
+    import conta_web
+    import contas
+    return conta_web.Conta(contas.Contas(env["NOTA_DB"], env["NOTA_SEGREDO_SESSAO"].encode()),
+                           base=env.get("NOTA_BASE_URL", "https://reforma.genesisinnovation.io"), env=env)
 
 
 def chamar_motor(metodo: str, api: str, dados: bytes | None) -> tuple[int, object]:
@@ -156,6 +169,8 @@ class Porta(BaseHTTPRequestHandler):
                                 {"Cache-Control": "no-store"})
         if caminho.startswith("/api/"):
             return self._repassar()
+        if caminho.startswith(ROTAS_CONTA):
+            return self._conta()
         return self._estatico(caminho)
 
     def do_POST(self):
@@ -164,7 +179,52 @@ class Porta(BaseHTTPRequestHandler):
             return self._repassar()
         if caminho == "/mcp":
             return self._mcp()
+        if caminho.startswith(ROTAS_CONTA):
+            return self._conta()
         self._json(405, {"erro": "método não permitido"})
+
+    def do_DELETE(self):
+        if self.path.split("?")[0].startswith("/conta/"):
+            return self._conta()
+        self._json(405, {"erro": "método não permitido"})
+
+    def _conta(self):
+        if CONTA is None:
+            return self._json(503, {"erro": {"codigo": "conta_desligada", "mensagem": "cadastro e emissão ainda não estão ligados neste servidor"}})
+        if not TETO.aceita(self._ip()):
+            return self._json(429, {"erro": f"mais de {TETO.por_minuto} pedidos por minuto deste IP"})
+        try:
+            n = int(self.headers.get("Content-Length") or "0")
+        except ValueError:
+            return self._json(400, {"erro": "Content-Length inválido"})
+        if n > CORPO_MAX:
+            return self._json(413, {"erro": f"corpo acima de {CORPO_MAX // 1024} KB"})
+        corpo = self.rfile.read(n) if n else b""
+        caminho, _, consulta = self.path.partition("?")
+        cab = {k.lower(): v for k, v in self.headers.items()}
+        r = CONTA.tratar(self.command, caminho, consulta, cab, corpo)
+        self.send_response(r.status)
+        for c in r.cookies:
+            self.send_header("Set-Cookie", c)
+        for k, v in {**CABECALHOS_SEGURANCA, "Cache-Control": "no-store"}.items():
+            self.send_header(k, v)
+        if r.bruto is not None:
+            self.send_header("Content-Type", r.tipo)
+            self.send_header("Content-Length", str(len(r.bruto)))
+            self.end_headers()
+            self.wfile.write(r.bruto)
+            return None
+        if r.redirecionar:
+            self.send_header("Location", r.redirecionar)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return None
+        dados = json.dumps(r.corpo, ensure_ascii=False).encode()
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(dados)))
+        self.end_headers()
+        self.wfile.write(dados)
+        return None
 
     def _mcp(self):
         try:
@@ -185,7 +245,20 @@ class Porta(BaseHTTPRequestHandler):
                 return 429, {"erro": f"mais de {TETO.por_minuto} pedidos por minuto deste IP"}
             return chamar_motor(metodo, api, dados)
 
-        status, resp = mcp.responder(corpo, chamar)
+        conta = None
+        aut = self.headers.get("Authorization", "")
+        if CONTA is not None and aut.lower().startswith("bearer "):
+            cab_conta = {"authorization": aut}
+
+            def conta(metodo: str, caminho: str, pedido: dict | None):
+                # Mesmo teto por IP da API: cada chamada à conta pelo MCP conta como um pedido.
+                if not TETO.aceita(ip):
+                    return 429, {"erro": f"mais de {TETO.por_minuto} pedidos por minuto deste IP"}
+                corpo_conta = json.dumps(pedido).encode() if pedido is not None else b""
+                r = CONTA.tratar(metodo, caminho, "", cab_conta, corpo_conta)
+                return r.status, r.corpo
+
+        status, resp = mcp.responder(corpo, chamar, conta)
         if resp is None:
             self.send_response(status)
             self.send_header("Content-Length", "0")
@@ -256,6 +329,16 @@ def subir_motor() -> subprocess.Popen | None:
                              "--server.port=8081", "--server.address=127.0.0.1"], cwd=os.environ.get("RTC_DIR", "/rtc"))
 
 
+def subir_danfse() -> subprocess.Popen | None:
+    """DANFSe Service da Receita (Go) em 127.0.0.1:8093, se a imagem o trouxer (RTC_DANFSE)."""
+    binario = os.environ.get("RTC_DANFSE", "")
+    if not binario:
+        return None
+    env = {**os.environ, "SERVER_PORT": "8093", "OTEL_SDK_DISABLED": "true"}
+    os.environ.setdefault("DANFSE_URL", "http://127.0.0.1:8093")
+    return subprocess.Popen([binario], env=env)
+
+
 def vigiar(motor: subprocess.Popen, servidor: ThreadingHTTPServer) -> None:
     motor.wait()
     sys.stderr.write(f"motor saiu com código {motor.returncode}; encerrando para o pod reiniciar\n")
@@ -263,6 +346,9 @@ def vigiar(motor: subprocess.Popen, servidor: ThreadingHTTPServer) -> None:
 
 
 def main() -> int:
+    global CONTA
+    danfse = subir_danfse()
+    CONTA = montar_conta()
     motor = subir_motor()
     servidor = ThreadingHTTPServer(("0.0.0.0", PORTA), Porta)
     servidor.daemon_threads = True
@@ -271,6 +357,8 @@ def main() -> int:
         threading.Thread(target=vigiar, args=(motor, servidor), daemon=True).start()
     sys.stderr.write(f"nota-aberta em :{PORTA}, motor em {BACKEND}\n")
     servidor.serve_forever()
+    if danfse and danfse.poll() is None:
+        danfse.terminate()
     if motor and motor.poll() is None:
         motor.terminate()
         try:

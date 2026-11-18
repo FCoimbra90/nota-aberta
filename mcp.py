@@ -48,6 +48,36 @@ FERRAMENTAS = [
      "annotations": {"readOnlyHint": True, "openWorldHint": False}},
 ]
 
+CONTA_FERRAMENTAS = [
+    {"name": "listar_empresas",
+     "description": "Empresas da conta dona da chave, com certificado (validade), notas no mês e o plano com a cota.",
+     "inputSchema": {"type": "object", "properties": {}},
+     "annotations": {"readOnlyHint": True, "openWorldHint": False}},
+    {"name": "emitir_nfse",
+     "description": "Emite uma NFS-e nacional pela empresa, com o certificado A1 guardado. Use `ref` (seu id do pedido): "
+                    "repetir o mesmo ref nunca gera segunda nota. Status: emitida, recusada (com erros do governo; não "
+                    "gasta cota) ou desconhecida (sem resposta do governo; chame de novo com o mesmo ref, que ele consulta "
+                    "antes de reenviar). O servidor diz se está em produção ou em produção restrita (sem valor fiscal).",
+     "inputSchema": {"type": "object", "required": ["empresa_id", "codigo_servico", "descricao", "valor"],
+                     "properties": {"empresa_id": {"type": "string"},
+                                    "codigo_servico": {"type": "string", "description": "cTribNac, 6 dígitos, ex.: 010101"},
+                                    "nbs": {"type": "string", "description": "NBS, 9 dígitos (opcional)"},
+                                    "descricao": {"type": "string"},
+                                    "valor": {"type": "string", "description": "em reais, ex.: 1500.00"},
+                                    "competencia": {"type": "string", "description": "AAAA-MM-DD; padrão: hoje"},
+                                    "ref": {"type": "string"},
+                                    "tomador": {"type": "object", "properties": {"documento": {"type": "string"},
+                                                                                 "nome": {"type": "string"},
+                                                                                 "email": {"type": "string"}}}}},
+     "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}},
+    {"name": "listar_notas",
+     "description": "Últimas notas da empresa, com status, chave de acesso e erros.",
+     "inputSchema": {"type": "object", "required": ["empresa_id"], "properties": {"empresa_id": {"type": "string"}}},
+     "annotations": {"readOnlyHint": True, "openWorldHint": False}},
+]
+NOMES_CONTA = {f["name"] for f in CONTA_FERRAMENTAS}
+
+# conta(metodo, caminho, corpo_dict | None) -> (status, dict): a mesma rota /conta da página, com a chave de API.
 # chamar(metodo, caminho_api, corpo_bytes | None) -> (status, dict | list | None)
 Chamador = Callable[[str, str, bytes | None], tuple[int, object]]
 
@@ -70,6 +100,26 @@ def _inteiro(args: dict, chave: str) -> int | None:
     if isinstance(v, bool) or not isinstance(v, int) or v <= 0:
         raise ErroFerramenta(f"{chave} deve ser um inteiro positivo")
     return v
+
+
+def executar_conta(nome: str, args: dict, conta) -> object:
+    if conta is None:
+        raise ErroFerramenta("esta ferramenta pede `Authorization: Bearer na_...` (crie a chave no painel)")
+    eid = str(args.get("empresa_id", ""))
+    if nome == "listar_empresas":
+        status, dados = conta("GET", "/conta/eu", None)
+        if status == 200:
+            dados = {"empresas": dados["empresas"], "plano": dados["plano"], "producao": dados["producao"]}
+    elif nome == "emitir_nfse":
+        pedido = {k: v for k, v in args.items() if k != "empresa_id"}
+        status, dados = conta("POST", f"/conta/empresas/{eid}/notas", pedido)
+    elif nome == "listar_notas":
+        status, dados = conta("GET", f"/conta/empresas/{eid}/notas", None)
+    else:
+        raise ErroFerramenta(f"ferramenta {nome!r} não existe")
+    if status >= 400:
+        raise ErroFerramenta(json.dumps(dados, ensure_ascii=False)[:2000])
+    return dados
 
 
 def executar(nome: str, args: dict, chamar: Chamador) -> object:
@@ -110,13 +160,13 @@ def executar(nome: str, args: dict, chamar: Chamador) -> object:
     return dados
 
 
-def responder(corpo: object, chamar: Chamador) -> tuple[int, object]:
+def responder(corpo: object, chamar: Chamador, conta=None) -> tuple[int, object]:
     """(status HTTP, corpo JSON ou None)."""
     if isinstance(corpo, list):
         if not corpo or len(corpo) > MAX_LOTE or any(isinstance(m, list) for m in corpo):
             return 400, {"jsonrpc": "2.0", "id": None,
                          "error": {"code": -32600, "message": f"lote inválido: de 1 a {MAX_LOTE} itens, sem listas aninhadas"}}
-        resp = [r for r in (responder(m, chamar)[1] for m in corpo) if r is not None]
+        resp = [r for r in (responder(m, chamar, conta)[1] for m in corpo) if r is not None]
         return (200, resp) if resp else (202, None)
     if not isinstance(corpo, dict) or corpo.get("jsonrpc") != "2.0":
         return 400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32600, "message": "requisição JSON-RPC 2.0 inválida"}}
@@ -134,13 +184,14 @@ def responder(corpo: object, chamar: Chamador) -> tuple[int, object]:
     if m == "ping":
         return ok({})
     if m == "tools/list":
-        return ok({"tools": FERRAMENTAS})
+        return ok({"tools": FERRAMENTAS + CONTA_FERRAMENTAS})
     if m == "tools/call":
         args = p.get("arguments") or {} if isinstance(p, dict) else {}
         try:
             if not isinstance(args, dict):
                 raise ErroFerramenta("arguments deve ser um objeto")
-            dados = executar(str(p.get("name", "")), args, chamar)
+            nome = str(p.get("name", ""))
+            dados = executar_conta(nome, args, conta) if nome in NOMES_CONTA else executar(nome, args, chamar)
             texto = json.dumps(dados, ensure_ascii=False)
             res = {"content": [{"type": "text", "text": texto}]}
             if isinstance(dados, dict):
