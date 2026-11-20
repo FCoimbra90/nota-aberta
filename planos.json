@@ -1,14 +1,26 @@
 {
-  "_doc": "Planos da Nota Aberta. Preço de lançamento (17/11/2026), a validar com uso medido. Mudar preço ou cota é mudar este arquivo; o código não tem número de plano. `link_pagar` é o id do link mensal no Genesis Pagar (pagar.genesisinnovation.io/p/<id>), criado uma vez com teste_dias 30; vazio = plano ainda sem cobrança ligada (o botão some).",
+  "_doc": "Planos da Nota Aberta. Tabela do Rafa (comercial, 18/11/2026). Mudar preço ou cota é mudar este arquivo; o código não tem número de plano. `link_pagar` é o id do link mensal no Genesis Pagar (pagar.genesisinnovation.io/p/<id>); preço novo = link novo (o antigo segue cobrando quem já assinou). `teste_dias` 0 = sem carência: cobra e libera no ato. A conta fica com o plano de maior preço entre as assinaturas com acesso. `sob_medida` é o contato do plano personalizado.",
   "planos": [
-    {"id": "gratis", "nome": "Grátis", "preco_mes": 0, "notas_mes": 20, "empresas": 1, "api": true,
-     "destaques": ["20 notas de serviço por mês", "1 empresa (CNPJ)", "Calculadora de CBS e IBS sem limite", "API e MCP"],
+    {"id": "gratis", "nome": "Grátis", "preco_mes": 0, "notas_mes": 5, "empresas": 1, "api": true, "teste_dias": 0,
+     "destaques": ["5 notas de serviço por mês", "1 empresa (CNPJ)", "Calculadora de CBS e IBS sem limite", "API e MCP"],
      "link_pagar": ""},
-    {"id": "profissional", "nome": "Profissional", "preco_mes": 29, "notas_mes": 300, "empresas": 3, "api": true,
-     "destaques": ["300 notas por mês", "até 3 empresas", "API e MCP para o seu sistema", "30 dias grátis, sem cartão"],
-     "link_pagar": ""},
-    {"id": "empresa", "nome": "Empresa", "preco_mes": 99, "notas_mes": 3000, "empresas": 20, "api": true,
-     "destaques": ["3.000 notas por mês", "até 20 empresas", "para contador e software house", "30 dias grátis, sem cartão"],
-     "link_pagar": ""}
-  ]
+    {"id": "essencial", "nome": "Essencial", "preco_mes": 29.90, "notas_mes": 300, "empresas": 1, "api": true, "teste_dias": 0,
+     "destaques": ["300 notas por mês", "1 empresa (CNPJ)", "API e MCP", "Sem carência: usa na hora"],
+     "link_pagar": "2bykhvut"},
+    {"id": "profissional", "nome": "Profissional", "preco_mes": 49.90, "notas_mes": 300, "empresas": 3, "api": true, "teste_dias": 0,
+     "destaques": ["300 notas por mês", "até 3 empresas", "API e MCP", "Sem carência: usa na hora"],
+     "link_pagar": "qg3s63xg"},
+    {"id": "avancado", "nome": "Avançado", "preco_mes": 79.90, "notas_mes": 999, "empresas": 10, "api": true, "teste_dias": 0,
+     "destaques": ["999 notas por mês", "até 10 empresas", "API e MCP para o seu sistema"],
+     "link_pagar": "pxhgtuvj"},
+    {"id": "empresa", "nome": "Empresa", "preco_mes": 199.90, "notas_mes": 3000, "empresas": 20, "api": true, "teste_dias": 0,
+     "destaques": ["3.000 notas por mês", "até 20 empresas", "para contador e software house"],
+     "link_pagar": "8ya9zfcp"}
+  ],
+  "sob_medida": {
+    "nome": "Sob medida",
+    "texto": "Mais notas, mais empresas ou integração com o seu sistema? Montamos um plano personalizado.",
+    "whatsapp": "5521995988404",
+    "email": "comercial@genesisinnovation.io"
+  }
 }

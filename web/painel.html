@@ -34,7 +34,25 @@
         <label>CPF/CNPJ do tomador <input name="doc" inputmode="numeric"></label>
         <label>Nome do tomador <input name="nome"></label>
         <label>E-mail do tomador <input name="email" type="email"></label>
-        <div class="largo3 acoes"><button type="submit">Emitir</button><span class="dica" id="r-emitir"></span></div>
+        <details class="largo3" id="end-tomador"><summary>Endereço do tomador (opcional)</summary>
+          <div class="grade3">
+            <label>CEP <input name="cep" inputmode="numeric" placeholder="88000-000" autocomplete="off"></label>
+            <label class="largo">Logradouro <input name="logradouro" maxlength="255"></label>
+            <label>Número <input name="numero" maxlength="60" placeholder="S/N"></label>
+            <label>Complemento <input name="complemento" maxlength="156"></label>
+            <label>Bairro <input name="bairro" maxlength="60"></label>
+            <label>Município <input name="cidade" readonly tabindex="-1" placeholder="sai do CEP"><input name="municipio_ibge" type="hidden"></label>
+            <p class="dica largo3" id="r-cep"></p>
+          </div>
+        </details>
+        <label>Competência (quando o serviço foi prestado) <input name="competencia" type="date" required></label>
+        <label>NBS (opcional, 9 dígitos) <input name="nbs" inputmode="numeric" pattern="\d{9}" placeholder="115021000"></label>
+        <p class="dica largo3" id="dica-repetir" hidden></p>
+        <fieldset class="largo3 ambiente-escolha"><legend>Tipo de nota</legend>
+          <label class="opcao"><input type="radio" name="ambiente" value="teste" checked><span><strong>Teste</strong> · sem valor fiscal, vai para o ambiente de teste do governo</span></label>
+          <label class="opcao"><input type="radio" name="ambiente" value="producao"><span><strong>Valor fiscal</strong> · nota de verdade, gera imposto</span></label>
+        </fieldset>
+        <div class="largo3 acoes"><button type="submit" id="b-emitir">Emitir nota de teste</button><span class="dica" id="r-emitir"></span></div>
       </form>
     </section>
 

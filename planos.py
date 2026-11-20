@@ -1,8 +1,8 @@
 """Plano de cada conta: grátis por padrão, pago se o e-mail tem assinatura com acesso no Genesis Pagar.
 
-O Genesis Pagar (apps/genesis-pagar) já faz o checkout do Stripe com 30 dias grátis sem cartão e registra o estado de
+O Genesis Pagar (apps/genesis-pagar) já faz o checkout do Stripe e registra o estado de
 cada assinatura (`acesso` só com teste ou pagamento em dia). Aqui só se pergunta a ele, por e-mail, e se escolhe o
-maior plano com acesso. Sem `PAGAR_TOKEN`, ou com o Pagar fora do ar, a conta fica no grátis: nunca se dá plano pago
+plano de maior preço com acesso. Sem `PAGAR_TOKEN`, ou com o Pagar fora do ar, a conta fica no grátis: nunca se dá plano pago
 por falha de consulta, e nunca se derruba a emissão por isso.
 """
 from __future__ import annotations
@@ -22,6 +22,10 @@ CACHE_SEGUNDOS = 300
 
 def carregar(arquivo: Path = ARQUIVO) -> list[dict]:
     return json.loads(arquivo.read_text(encoding="utf-8"))["planos"]
+
+
+def sob_medida(arquivo: Path = ARQUIVO) -> dict:
+    return json.loads(arquivo.read_text(encoding="utf-8")).get("sob_medida") or {}
 
 
 def por_id(planos: list[dict]) -> dict[str, dict]:
@@ -58,7 +62,8 @@ class Planos:
             return guardado[1]
         links = {a.get("link") for a in self._consultar(email) if a.get("acesso")}
         pagos = [p for p in self.lista if p.get("link_pagar") and p["link_pagar"] in links]
-        plano = max(pagos, key=lambda p: p["notas_mes"]) if pagos else self.gratis
+        # Por preço, não por cota: dois planos podem ter a mesma cota de notas e diferir em empresas.
+        plano = max(pagos, key=lambda p: p["preco_mes"]) if pagos else self.gratis
         self._cache[email] = (agora, plano)
         return plano
 

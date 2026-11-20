@@ -177,7 +177,7 @@ def test_mcp_lista_calculo_so_leitura_e_emissao_marcada_como_escrita(porta):
     st, r = _rpc(porta, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     ferramentas = {f["name"]: f["annotations"]["readOnlyHint"] for f in r["result"]["tools"]}
     assert st == 200 and ferramentas == {"calcular_cbs_ibs": True, "tabelas_cbs_ibs": True, "aliquotas_referencia": True,
-                                         "versao_motor": True, "listar_empresas": True, "emitir_nfse": False,
+                                         "versao_motor": True, "listar_empresas": True, "emitir_nfse": False, "cancelar_nfse": False,
                                          "listar_notas": True}
 
 
@@ -226,3 +226,10 @@ def test_mcp_com_motor_real_da_42_24_de_cbs_no_exemplo_da_receita(monkeypatch):
         srv.shutdown()
     g = r["result"]["structuredContent"]["objetos"][0]["tribCalc"]["IBSCBS"]["gIBSCBS"]
     assert g["gCBS"]["vCBS"] == "42.24"
+
+
+def test_calculadora_liga_os_ouvintes_antes_de_esperar_as_tabelas():
+    """UF escolhida durante o carregamento ficava sem municípios: o ouvinte só entrava depois dos awaits."""
+    js = (AQUI / "web" / "app.js").read_text(encoding="utf-8")
+    corpo = js[js.index("async function iniciar()"):]
+    assert corpo.index('$("#uf").addEventListener') < corpo.index("await ")

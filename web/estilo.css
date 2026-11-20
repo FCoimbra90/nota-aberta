@@ -96,17 +96,24 @@ a.botao.secundario { background: transparent; color: var(--marca); }
 .passo { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--marca); color: var(--marca-texto); font-weight: 700; }
 .titulo-secao { text-align: center; font-size: 1.6rem; margin: 28px 0 4px; }
 .centro { text-align: center; margin-bottom: 18px; }
-.planos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px; }
+.planos { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 24px; }
 .plano { background: var(--cartao); border: 1px solid var(--borda); border-radius: var(--raio); padding: 22px; display: flex; flex-direction: column; gap: 10px; }
 .plano ul { padding-left: 18px; margin: 0; flex: 1; }
 .plano li { margin-bottom: 6px; }
 .destaque-plano { border: 2px solid var(--marca); }
-.preco { font-size: 2rem; font-weight: 800; margin: 0; }
+.preco { font-size: 1.9rem; font-weight: 800; margin: 0; white-space: nowrap; }
+.preco-texto { font-size: 1.5rem; white-space: normal; }
 .preco span { font-size: 1rem; font-weight: 500; color: var(--suave); }
 .barra { border-bottom: 1px solid var(--borda); background: var(--cartao); margin-bottom: 20px; }
 .barra .nav { padding: 14px 0; }
 .faixa { background: var(--marca-claro); border-radius: 10px; padding: 12px 14px; font-weight: 600; }
 .faixa-teste { background: var(--aviso-fundo); color: var(--aviso); }
+.ambiente-escolha { border: 1px solid var(--borda); border-radius: var(--raio); padding: 10px 14px; display: grid; gap: 6px; margin: 0; }
+.ambiente-escolha .opcao { display: flex; flex-direction: row; gap: 10px; align-items: center; font-weight: 400; cursor: pointer; }
+.ambiente-escolha .opcao input { width: auto; flex: none; margin: 0; padding: 0; min-height: 0; accent-color: var(--marca); }
+.ambiente-escolha .opcao span { display: inline; }
+.botao-fiscal { background: var(--erro); border-color: var(--erro); }
+.etiqueta { display: inline-block; font-size: .75rem; padding: 1px 6px; border-radius: 4px; background: var(--aviso-fundo); color: var(--aviso); }
 .empresa { border-top: 1px solid var(--borda); padding: 14px 0; }
 .empresa h3 { margin-bottom: 4px; }
 .largo3 { grid-column: 1 / -1; }

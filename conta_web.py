@@ -129,7 +129,7 @@ class Conta:
             return Resultado(302, redirecionar="/", cookies=[_cookie(COOKIE, "", 0)])
         if caminho == "/conta/planos" and m == "GET":
             return Resultado(200, {"planos": [p | {"checkout": planos_mod.link_checkout(p)} for p in self.planos.lista],
-                                   "producao": self.emissor.producao})
+                                   "sob_medida": planos_mod.sob_medida(), "producao": self.emissor.producao})
 
         u = self._exigir(cab, m)
         partes = [p for p in caminho.split("/") if p][1:]  # sem o "conta"
@@ -181,6 +181,10 @@ class Conta:
             plano = self.planos.do_email(u["email"])
             nota = self.emissor.emitir(u["id"], eid, self._json(corpo), limite_mes=plano["notas_mes"], mestra=self._mestra())
             return Resultado(201 if nota["status"] == "emitida" else 202, nota)
+        if len(resto) == 3 and resto[0] == "notas" and resto[2] == "cancelar" and m == "POST":
+            d = self._json(corpo)
+            return Resultado(200, self.emissor.cancelar(u["id"], eid, resto[1], motivo_codigo=str(d.get("motivo_codigo", "1")),
+                                                        motivo=str(d.get("motivo", "")), mestra=self._mestra()))
         if len(resto) == 3 and resto[0] == "notas" and resto[2] == "pdf" and m == "GET":
             self.c.empresa(u["id"], eid)
             linha = self.c.bd.execute("select nfse_xml from notas where id = ? and empresa_id = ? and status = 'emitida'",

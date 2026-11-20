@@ -59,7 +59,7 @@ CABECALHOS_SEGURANCA = {
 # A página só carrega o próprio JS/CSS; o Swagger do jar usa script e estilo inline, por isso
 # a CSP estrita vale só para a nossa página.
 CSP_PAGINA = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-              "connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+              "connect-src 'self' https://viacep.com.br; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 
 
 def permitida(metodo: str, caminho_api: str) -> bool:

@@ -108,3 +108,28 @@ def test_cancelamento_tem_id_do_evento_e_motivo_com_15_caracteres_no_minimo():
     raiz = lxml.fromstring(xml.encode())
     assert raiz.find("n:infPedReg", namespaces=NFSE).get("Id") == f"PRE{chave_nfse}101101"
     assert len(raiz.findtext(".//n:xMotivo", namespaces=NFSE)) == 15
+
+
+def _toma(**end):
+    return dps.Tomador("11.222.333/0001-81", "Prefeitura de Ipu", email="c@ipu.ce.gov.br", **end)
+
+
+def _xml(tomador):
+    return dps.montar(producao=True, prestador=dps.Prestador("11222333000181", "2305803", "simples"), serie="1", numero=1,
+                      emitida_em=dt.datetime(2026, 11, 19, 12, tzinfo=dt.timezone.utc), competencia="2026-10-31",
+                      codigo_servico="171001", descricao="Contrato", valor_centavos=100, tomador=tomador)[1]
+
+
+def test_endereco_do_tomador_vai_na_ordem_do_xsd_entre_nome_e_email():
+    # TCInfoPessoa: doc, IM, xNome, end, fone, email; TCEndereco: endNac(cMun, CEP), xLgr, nro, xCpl, xBairro.
+    xml = _xml(_toma(cep="63250-000", municipio_ibge="2305803", logradouro="Praça da Matriz", numero="S/N", bairro="Centro"))
+    assert ("<xNome>Prefeitura de Ipu</xNome><end><endNac><cMun>2305803</cMun><CEP>63250000</CEP></endNac>"
+            "<xLgr>Praça da Matriz</xLgr><nro>S/N</nro><xBairro>Centro</xBairro></end><email>") in xml
+
+
+def test_endereco_pela_metade_e_recusado_antes_de_ir_ao_governo():
+    with pytest.raises(dps.DpsInvalida):
+        _xml(_toma(cep="63250000", logradouro="Praça da Matriz"))
+    with pytest.raises(dps.DpsInvalida):
+        _xml(_toma(cep="6325", municipio_ibge="2305803", logradouro="Rua", numero="1", bairro="Centro"))
+    assert "<end>" not in _xml(_toma())

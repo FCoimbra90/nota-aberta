@@ -34,6 +34,24 @@ create table if not exists notas (
 SERIE = "1"
 MAX_COLISOES = 5
 ATRASO_RELOGIO = dt.timedelta(seconds=60)
+ENDERECO = ("cep", "municipio_ibge", "logradouro", "numero", "complemento", "bairro")
+
+# O texto do governo diz o que falhou, não o que fazer. Medido em 18/11/2026 na produção restrita: Ipu/CE ativo em
+# produção e inativo no teste (E0037); Rio/RJ ativo no teste mas sem nenhuma alíquota cadastrada (E0312 em todo código).
+DICAS = {
+    "E0037": {False: "O seu município ainda não está ativo no ambiente de TESTE do governo (produção restrita). Isso não "
+                     "diz nada da produção: lá ele pode estar ativo. Fale com a gente para emitir em produção.",
+              True: "O seu município ainda não aderiu ao sistema nacional da NFS-e. Enquanto isso, a nota sai pelo sistema "
+                    "da prefeitura."},
+    "E0312": {False: "O município não tem este código de serviço cadastrado no ambiente de TESTE do governo. Muitas "
+                     "prefeituras não cadastram as alíquotas no teste; em produção o cadastro costuma estar completo.",
+              True: "O seu município não usa este código de serviço na data da competência. Confira o código da lista "
+                    "nacional com o seu contador."},
+}
+
+
+def com_dicas(erros: list[dict], producao: bool) -> list[dict]:
+    return [e | {"dica": DICAS[e["codigo"]][producao]} if e.get("codigo") in DICAS else e for e in erros]
 
 
 def _valor_xml(xml: str, tag: str) -> str:
@@ -43,6 +61,7 @@ def _valor_xml(xml: str, tag: str) -> str:
 
 class Emissor:
     def __init__(self, contas: Contas, *, producao: bool, fabrica_sefin=Sefin, agora=None):
+        # `producao` = o servidor PERMITE nota com valor fiscal; quem escolhe é cada pedido (`ambiente`, padrão "teste").
         self.c, self.producao, self.fabrica_sefin = contas, producao, fabrica_sefin
         self.agora = agora or (lambda: dt.datetime.now(dt.timezone.utc))
         self.c.bd.executescript(ESQUEMA)
@@ -79,7 +98,47 @@ class Emissor:
     def publica(n: dict) -> dict:
         return {k: n[k] for k in ("id", "ref", "status", "numero", "chave", "erros", "criada", "atualizada")} | {
             "numero_nfse": _valor_xml(n["nfse_xml"], "nNFSe"), "valor": n["pedido"]["valor_centavos"] / 100,
-            "tomador": (n["pedido"].get("tomador") or {}).get("nome", ""), "producao": bool(n["producao"])}
+            "tomador": (n["pedido"].get("tomador") or {}).get("nome", ""), "producao": bool(n["producao"]),
+            # O que o botão "Repetir" do painel precisa para refazer a nota do mês seguinte (contrato recorrente).
+            "servico": {k: n["pedido"].get(k, "") for k in ("codigo_servico", "nbs", "descricao", "competencia")}
+                       | {"tomador": n["pedido"].get("tomador")}}
+
+    # --------------------------------------------------------------- cancelar
+
+    def cancelar(self, usuario_id: str, empresa_id: str, nota_id: str, *, motivo_codigo: str, motivo: str,
+                 mestra: bytes) -> dict:
+        """Evento 101101 na Sefin. Usa o ambiente em que a NOTA saiu, não o do servidor: nota de teste se cancela no teste.
+        Sem resposta do governo, consulta o evento antes de dizer qualquer coisa (pode ter sido registrado)."""
+        emp = self.c.empresa(usuario_id, empresa_id)
+        linha = self.c.bd.execute("select id from notas where id = ? and empresa_id = ?", (nota_id, empresa_id)).fetchone()
+        if not linha:
+            raise Erro(404, "nota_nao_encontrada", "nota não encontrada")
+        nota = self.nota_por_id(nota_id)
+        if nota["status"] == "cancelada":
+            return self.publica(nota)
+        if nota["status"] != "emitida" or not nota["chave"]:
+            raise Erro(409, "nota_nao_emitida", "só nota emitida pode ser cancelada")
+        if len((motivo or "").strip()) < 15:
+            raise Erro(422, "motivo_curto", "descreva o motivo do cancelamento (15 caracteres ou mais)")
+        producao = bool(nota["producao"])
+        try:
+            xml = dps.cancelamento(producao=producao, cnpj=emp["cnpj"], chave=nota["chave"], motivo_codigo=str(motivo_codigo),
+                                   motivo=motivo, em=self.agora() - ATRASO_RELOGIO)
+        except dps.DpsInvalida as e:
+            raise Erro(422, "cancelamento_invalido", str(e)) from None
+        pfx, senha = self.c.abrir_certificado(usuario_id, empresa_id, mestra)
+        sefin = self.fabrica_sefin(producao=producao, pfx=pfx, senha=senha)
+        chave_privada, cert, _ = pkcs12.load_key_and_certificates(pfx, senha.encode())
+        r = sefin.enviar_evento(nota["chave"], dps.assinar(xml, chave_privada, cert))
+        if r.alcancou and r.status < 300:
+            return self.publica(self._salvar(nota_id, status="cancelada", erros=[]))
+        confere = sefin.consultar_evento(nota["chave"], dps.EVENTO_CANCELAMENTO)
+        if confere.alcancou and confere.status == 200:
+            return self.publica(self._salvar(nota_id, status="cancelada", erros=[]))
+        if not r.alcancou or r.status >= 500:
+            raise Erro(502, "governo_sem_resposta", "o governo não respondeu; a nota segue emitida. Tente de novo.")
+        erros = r.erros()
+        raise Erro(422, "cancelamento_recusado", "; ".join(f"{e['codigo']} {e['mensagem']}" for e in erros) or "recusado")
 
     # --------------------------------------------------------------- emitir
 
@@ -94,8 +153,13 @@ class Emissor:
             if nota["status"] in ("emitida", "cancelada"):
                 return self.publica(nota)
         pedido = self._validar(pedido)
+        if pedido["producao"] and not self.producao:
+            raise Erro(403, "producao_desligada", "este servidor só emite nota de teste (sem valor fiscal)")
+        if existente and bool(self.nota_por_id(existente[0])["producao"]) != pedido["producao"]:
+            # O mesmo ref em outro ambiente seria outra nota: reaproveitar a linha trocaria teste por fiscal no meio do caminho.
+            raise Erro(409, "ref_em_outro_ambiente", "este ref já foi usado no outro ambiente; use um ref novo")
         pfx, senha = self.c.abrir_certificado(usuario_id, empresa_id, mestra)
-        sefin = self.fabrica_sefin(producao=self.producao, pfx=pfx, senha=senha)
+        sefin = self.fabrica_sefin(producao=pedido["producao"], pfx=pfx, senha=senha)
         chave, cert, _ = pkcs12.load_key_and_certificates(pfx, senha.encode())
         if existente:
             nota = self.nota_por_id(existente[0])
@@ -116,7 +180,7 @@ class Emissor:
                 self.c.bd.execute("insert into notas (id, empresa_id, ref, status, pedido, numero, producao, mes, criada, atualizada) "
                                   "values (?, ?, ?, 'pendente', ?, ?, ?, ?, ?, ?)",
                                   (nota_id, empresa_id, ref, json.dumps(pedido, ensure_ascii=False),
-                                   numero, int(self.producao), mes_atual(), _agora(), _agora()))
+                                   numero, int(pedido["producao"]), mes_atual(), _agora(), _agora()))
             nota = self.nota_por_id(nota_id)
         return self.publica(self._enviar(sefin, emp, self.nota_por_id(nota["id"]), chave, cert))
 
@@ -128,9 +192,18 @@ class Emissor:
         tomador = p.get("tomador") or None
         return {"codigo_servico": str(p.get("codigo_servico", "")), "nbs": str(p.get("nbs") or ""),
                 "descricao": str(p.get("descricao", "")), "valor_centavos": valor,
-                "competencia": str(p.get("competencia") or ""),
+                "competencia": str(p.get("competencia") or ""), "producao": self._ambiente(p),
                 "tomador": {"documento": str(tomador.get("documento", "")), "nome": str(tomador.get("nome", "")),
-                            "email": str(tomador.get("email") or "")} if isinstance(tomador, dict) else None}
+                            "email": str(tomador.get("email") or "")}
+                           | {k: str(tomador.get(k) or "") for k in ENDERECO if tomador.get(k)}
+                           if isinstance(tomador, dict) else None}
+
+    @staticmethod
+    def _ambiente(p: dict) -> bool:
+        ambiente = str(p.get("ambiente") or "teste")
+        if ambiente not in ("teste", "producao"):
+            raise Erro(422, "ambiente_invalido", 'ambiente é "teste" (sem valor fiscal) ou "producao" (valor fiscal)')
+        return ambiente == "producao"
 
     def _prestador(self, emp: dict) -> dps.Prestador:
         return dps.Prestador(cnpj=emp["cnpj"], municipio_ibge=str(emp["municipio_ibge"]), regime=emp["regime"])
@@ -140,7 +213,7 @@ class Emissor:
         emitida_em = self.agora() - ATRASO_RELOGIO
         try:
             id_dps, xml = dps.montar(
-                producao=self.producao, prestador=self._prestador(emp), serie=SERIE, numero=nota["numero"],
+                producao=bool(nota["producao"]), prestador=self._prestador(emp), serie=SERIE, numero=nota["numero"],
                 emitida_em=emitida_em, competencia=p["competencia"] or dps.hora_brasilia(emitida_em)[:10],
                 codigo_servico=p["codigo_servico"], descricao=p["descricao"], valor_centavos=p["valor_centavos"], nbs=p["nbs"],
                 tomador=dps.Tomador(**p["tomador"]) if p["tomador"] else None)
@@ -154,7 +227,7 @@ class Emissor:
         chave = str(r.dados.get("chaveAcesso") or "")
         if r.status < 300 and chave:
             return self._salvar(nota["id"], status="emitida", chave=chave, nfse_xml=r.dados.get("nfseXml", ""), erros=[])
-        erros = r.erros()
+        erros = com_dicas(r.erros(), bool(nota["producao"]))
         if not any(e["codigo"] == DPS_DUPLICADA for e in erros):
             self.c.devolver_nota(emp["id"], nota["mes"])
             return self._salvar(nota["id"], status="recusada", erros=erros)

@@ -244,16 +244,18 @@ async function exemplo() {
 async function iniciar() {
   $("#host").textContent = location.host;
   $("#data").value = hoje();
-  carregarVersao();
-  await Promise.all([carregarUfs(), carregarTabelas()]);
-  novoItem({ base: 1000 });
-  await carregarAliquotas();
+  // Os ouvintes entram ANTES de qualquer await: quem escolhia a UF enquanto as tabelas ainda carregavam
+  // (ou um robô rápido) ficava sem a lista de municípios para sempre (medido no ar em 18/11/2026).
   $("#uf").addEventListener("change", async () => { await carregarMunicipios(); carregarAliquotas(); });
   $("#municipio").addEventListener("change", carregarAliquotas);
   $("#data").addEventListener("change", async () => { await carregarTabelas(); carregarAliquotas(); });
   $("#mais").addEventListener("click", () => novoItem({ base: 0 }));
   $("#form").addEventListener("submit", calcular);
   $("#exemplo").addEventListener("click", exemplo);
+  carregarVersao();
+  await Promise.all([carregarUfs(), carregarTabelas()]);
+  novoItem({ base: 1000 });
+  await carregarAliquotas();
 }
 
 iniciar().catch((e) => { $("#versao").textContent = "O motor de cálculo não respondeu: " + e.message; });

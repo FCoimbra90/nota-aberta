@@ -105,6 +105,10 @@ class Sefin:
     def consultar_nfse(self, chave: str) -> Resposta:
         return self._pedir("GET", f"/nfse/{chave}")
 
+    def consultar_evento(self, chave: str, tipo: str, sequencia: int = 1) -> Resposta:
+        """200 = o evento está registrado no governo (medido em 18/11 com o cancelamento 101101/1)."""
+        return self._pedir("GET", f"/nfse/{chave}/eventos/{tipo}/{sequencia}")
+
     def enviar_evento(self, chave: str, evento_assinado: str) -> Resposta:
         comprimido = base64.b64encode(gzip.compress(evento_assinado.encode("utf-8"))).decode("ascii")
         return self._pedir("POST", f"/nfse/{chave}/eventos", {"pedidoRegistroEventoXmlGZipB64": comprimido})

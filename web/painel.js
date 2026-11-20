@@ -20,10 +20,11 @@ let EU = null;
 function plano(eu, planos) {
   const p = eu.plano;
   const usadas = eu.empresas.reduce((s, e) => s + e.notas_no_mes, 0);
-  const outros = planos.filter((x) => x.checkout && x.notas_mes > p.notas_mes);
+  const outros = planos.filter((x) => x.checkout && x.preco_mes > p.preco_mes);
+  const reais = (v) => Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   $("#plano").innerHTML = `<h2>Plano ${esc(p.nome)}</h2>
     <p>${usadas} de ${p.notas_mes} notas usadas neste mês · até ${p.empresas} empresa(s)</p>
-    <div class="acoes">${outros.map((o) => `<a class="botao" href="${esc(o.checkout)}">${esc(o.nome)}: R$ ${o.preco_mes}/mês, 30 dias grátis</a>`).join("")}
+    <div class="acoes">${outros.map((o) => `<a class="botao" href="${esc(o.checkout)}">${esc(o.nome)}: R$ ${reais(o.preco_mes)}/mês${o.teste_dias ? `, ${o.teste_dias} dias grátis` : ""}</a>`).join("")}
     ${outros.length ? '<button type="button" class="secundario" id="ja-assinei">Já assinei: atualizar</button>' : ""}</div>
     <p class="dica">${outros.length ? "Assine com o mesmo e-mail do login: o plano muda sozinho." : "Planos pagos aparecem aqui quando a cobrança estiver ligada."}</p>`;
   const b = $("#ja-assinei");
@@ -70,8 +71,63 @@ async function notas(eid) {
   const { notas: lista } = await api("GET", `/conta/empresas/${eid}/notas`);
   $("#notas").innerHTML = lista.length ? `<table><thead><tr><th>Quando</th><th>Tomador</th><th class="num">Valor</th><th>Situação</th></tr></thead><tbody>
     ${lista.map((n) => `<tr><td>${esc(n.criada.slice(0, 16).replace("T", " "))}</td><td>${esc(n.tomador || "—")}</td><td class="num">${brl(n.valor)}</td>
-      <td>${esc(ESTADOS[n.status] || n.status)}${n.numero_nfse ? ` nº ${esc(n.numero_nfse)}` : ""}${n.status === "emitida" ? ` · <a href="/conta/empresas/${esc(eid)}/notas/${esc(n.id)}/pdf" target="_blank" rel="noopener">PDF</a>` : ""}${n.erros.length ? `<br><span class="erro-curto">${esc(n.erros.map((x) => `${x.codigo} ${x.mensagem}`).join("; "))}</span>` : ""}</td></tr>`).join("")}
+      <td>${n.producao ? "" : '<span class="etiqueta">teste</span> '}${esc(ESTADOS[n.status] || n.status)}${n.numero_nfse ? ` nº ${esc(n.numero_nfse)}` : ""}${n.status === "emitida" ? ` · <a href="/conta/empresas/${esc(eid)}/notas/${esc(n.id)}/pdf" target="_blank" rel="noopener">PDF</a> · <button type="button" class="secundario mini cancelar-nota" data-n="${esc(n.id)}" data-num="${esc(n.numero_nfse || "")}">Cancelar</button>` : ""}${["emitida", "recusada", "cancelada"].includes(n.status) ? ` · <button type="button" class="secundario mini repetir-nota" data-n="${esc(n.id)}">Repetir</button>` : ""}${n.erros.length ? `<br><span class="erro-curto">${esc(n.erros.map((x) => `${x.codigo} ${x.mensagem}${x.dica ? ` → ${x.dica}` : ""}`).join("; "))}</span>` : ""}</td></tr>`).join("")}
     </tbody></table>` : '<p class="dica">Nenhuma nota ainda.</p>';
+  document.querySelectorAll("#notas .cancelar-nota").forEach((b) => { b.onclick = () => cancelar(eid, b.dataset.n, b.dataset.num); });
+  document.querySelectorAll("#notas .repetir-nota").forEach((b) => { b.onclick = () => repetir(lista.find((x) => x.id === b.dataset.n)); });
+}
+
+// Contrato recorrente (licitação de prefeitura): mesma nota todo mês, muda só a competência. Preenche o formulário
+// com a nota escolhida e deixa a competência para a pessoa conferir; nada é enviado sem clicar em Emitir.
+function repetir(n) {
+  const f = $("#f-emitir"), s = n.servico || {}, t = s.tomador || {};
+  f.codigo_servico.value = s.codigo_servico || ""; f.descricao.value = s.descricao || ""; f.nbs.value = s.nbs || "";
+  f.valor.value = Number(n.valor).toFixed(2).replace(".", ",");
+  f.doc.value = t.documento || ""; f.nome.value = t.nome || ""; f.email.value = t.email || "";
+  for (const k of CAMPOS_END) f[k].value = t[k] || "";
+  f.cidade.value = t.municipio_ibge ? `IBGE ${t.municipio_ibge}` : "";
+  $("#end-tomador").open = Boolean(t.cep);
+  f.ambiente.value = n.producao ? "producao" : "teste"; marcarAmbiente();
+  const d = $("#dica-repetir"); d.hidden = false;
+  d.textContent = `Copiado da nota de ${n.criada.slice(0, 10).split("-").reverse().join("/")}. Confira a competência antes de emitir.`;
+  f.scrollIntoView({ behavior: "smooth", block: "start" }); f.competencia.focus();
+}
+
+// Endereço do tomador: vai inteiro ou não vai (o servidor recusa pela metade). O CEP preenche rua, bairro e o código IBGE.
+const CAMPOS_END = ["cep", "logradouro", "numero", "complemento", "bairro", "municipio_ibge"];
+function enderecoDoForm(f) {
+  const end = Object.fromEntries(CAMPOS_END.map((k) => [k, f[k].value.trim()]).filter(([, v]) => v));
+  if (end.cep) end.cep = end.cep.replace(/\D/g, "");
+  return end;
+}
+async function buscarCep(f) {
+  const cep = f.cep.value.replace(/\D/g, ""), saida = $("#r-cep");
+  if (cep.length !== 8) return;
+  saida.textContent = "Buscando o CEP…";
+  try {
+    const d = await (await fetch(`https://viacep.com.br/ws/${cep}/json/`)).json();
+    if (d.erro) { saida.textContent = "CEP não encontrado: preencha à mão."; return; }
+    f.logradouro.value ||= d.logradouro || ""; f.bairro.value ||= d.bairro || "";
+    f.municipio_ibge.value = d.ibge || ""; f.cidade.value = d.localidade ? `${d.localidade}/${d.uf}` : "";
+    saida.textContent = "Endereço preenchido pelo CEP. Confira e coloque o número.";
+    f.numero.focus();
+  } catch { saida.textContent = "Não consegui consultar o CEP agora."; }
+}
+
+// Cancelamento é evento no governo e não tem volta: pede motivo (o governo exige 15+ caracteres) e confirma.
+async function cancelar(eid, nid, numero) {
+  const codigo = prompt("Motivo do cancelamento:\n1 = erro na emissão\n2 = serviço não prestado\n9 = outro", "1");
+  if (codigo === null) return;
+  if (!["1", "2", "9"].includes(codigo.trim())) { alert("Digite 1, 2 ou 9."); return; }
+  const motivo = prompt("Descreva o motivo (15 caracteres ou mais):", "");
+  if (motivo === null) return;
+  if (motivo.trim().length < 15) { alert("O motivo precisa ter 15 caracteres ou mais."); return; }
+  if (!confirm(`Cancelar a NFS-e${numero ? ` nº ${numero}` : ""}? O cancelamento vai para o governo e não tem volta.`)) return;
+  try {
+    await api("POST", `/conta/empresas/${eid}/notas/${nid}/cancelar`, { motivo_codigo: codigo.trim(), motivo: motivo.trim() });
+    alert("Nota cancelada no governo.");
+  } catch (err) { alert(`Não cancelou: ${err.message}`); }
+  notas(eid);
 }
 
 function chaves(eu) {
@@ -89,25 +145,44 @@ async function carregar() {
   $("#quem").textContent = EU.usuario.email;
   const amb = $("#ambiente");
   amb.hidden = false;
-  amb.textContent = EU.producao ? "Produção: as notas têm valor fiscal." : "Ambiente de teste do governo (produção restrita): as notas NÃO têm valor fiscal.";
+  amb.textContent = EU.producao ? "Escolha em cada nota: Teste (sem valor fiscal) ou Valor fiscal (nota de verdade)."
+    : "Este servidor só emite nota de teste (ambiente de teste do governo): as notas NÃO têm valor fiscal.";
   amb.classList.toggle("faixa-teste", !EU.producao);
+  const fiscal = $('#f-emitir input[value="producao"]');
+  fiscal.disabled = !EU.producao;
+  if (!EU.producao) $('#f-emitir input[value="teste"]').checked = true;
+  marcarAmbiente();
   plano(EU, planos); empresas(EU); chaves(EU);
 }
 
 $("#f-emitir").onsubmit = async (ev) => {
   ev.preventDefault();
   const f = ev.target, saida = $("#r-emitir");
-  const tomador = f.doc.value.trim() ? { documento: f.doc.value, nome: f.nome.value, email: f.email.value } : undefined;
+  const tomador = f.doc.value.trim() ? { documento: f.doc.value, nome: f.nome.value, email: f.email.value, ...enderecoDoForm(f) } : undefined;
   saida.textContent = "Enviando ao governo…";
   try {
+    const ambiente = f.ambiente.value;
+    if (ambiente === "producao" && !confirm("Emitir NOTA COM VALOR FISCAL? Ela vale para a Receita e para a prefeitura.")) { saida.textContent = ""; return; }
     const n = await api("POST", `/conta/empresas/${f.empresa.value}/notas`, { codigo_servico: f.codigo_servico.value, descricao: f.descricao.value,
-      valor: f.valor.value, tomador, ref: `painel-${Date.now()}` });
+      valor: f.valor.value, tomador, ambiente, competencia: f.competencia.value, nbs: f.nbs.value.replace(/\D/g, ""),
+      ref: `painel-${Date.now()}` });
     saida.textContent = n.status === "emitida" ? `Nota emitida${n.numero_nfse ? ` nº ${n.numero_nfse}` : ""}.`
-      : n.status === "desconhecida" ? "O governo não respondeu. Ela aparece na lista assim que confirmar." : `Recusada: ${n.erros.map((x) => x.mensagem).join("; ")}`;
+      : n.status === "desconhecida" ? "O governo não respondeu. Ela aparece na lista assim que confirmar." : `Recusada: ${n.erros.map((x) => x.dica || x.mensagem).join("; ")}`;
     carregar();
   } catch (err) { saida.textContent = err.message; }
 };
 $("#f-emitir").empresa.onchange = (ev) => notas(ev.target.value);
+$("#f-emitir").cep.addEventListener("blur", () => buscarCep($("#f-emitir")));
+// Competência começa em hoje (horário de Brasília pelo relógio da pessoa) e fica aberta: serviço de outubro emitido em novembro.
+$("#f-emitir").competencia.value = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+// O botão diz o que vai sair: "nota de teste" ou "nota com valor fiscal" (vermelho), para ninguém emitir fiscal sem ver.
+function marcarAmbiente() {
+  const fiscal = $("#f-emitir").ambiente.value === "producao", b = $("#b-emitir");
+  b.textContent = fiscal ? "Emitir nota com valor fiscal" : "Emitir nota de teste";
+  b.classList.toggle("botao-fiscal", fiscal);
+}
+document.querySelectorAll('#f-emitir input[name="ambiente"]').forEach((r) => { r.onchange = marcarAmbiente; });
 
 $("#f-empresa").onsubmit = async (ev) => {
   ev.preventDefault();

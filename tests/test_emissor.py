@@ -57,6 +57,21 @@ class SefinFalsa:
         return sefin.Resposta(True, 200, {"nfseXml": "<NFSe><nNFSe>9</nNFSe><vServ>1500.00</vServ><CNPJ>11222333000181</CNPJ></NFSe>"})
 
 
+    eventos: ClassVar[list] = []
+    evento_resposta: ClassVar[object] = None
+    registrados: ClassVar[set] = set()
+
+    def enviar_evento(self, chave, xml):
+        SefinFalsa.eventos.append((self.producao, chave, xml))
+        r = SefinFalsa.evento_resposta or sefin.Resposta(True, 201, {"eventoXml": "<evento/>"})
+        if r.alcancou and r.status < 300:
+            SefinFalsa.registrados.add(chave)
+        return r
+
+    def consultar_evento(self, chave, tipo, sequencia=1):
+        return sefin.Resposta(True, 200 if chave in SefinFalsa.registrados else 404, {})
+
+
 def ok(chave="1" * 50):
     return sefin.Resposta(True, 201, {"chaveAcesso": chave, "nfseXml": "<NFSe><nNFSe>1</nNFSe></NFSe>"})
 
@@ -64,6 +79,7 @@ def ok(chave="1" * 50):
 @pytest.fixture()
 def amb(tmp_path):
     SefinFalsa.roteiro, SefinFalsa.emitidas, SefinFalsa.enviadas = [], {}, []
+    SefinFalsa.eventos, SefinFalsa.evento_resposta, SefinFalsa.registrados = [], None, set()
     c = contas.Contas(tmp_path / "n.db", b"s" * 32)
     u = c.entrar_google({"sub": "g", "email": "a@b.com", "verificado": True})
     e = c.cadastrar_empresa(u["id"], CNPJ, "Empresa", 4205407, "simples")
@@ -97,6 +113,15 @@ def test_recusa_do_governo_devolve_a_cota_e_guarda_o_erro(amb):
     n = _emitir(amb)
     assert n["status"] == "recusada" and n["erros"][0]["codigo"] == "E0312"
     assert amb[0].empresa(amb[2], amb[3])["notas_no_mes"] == 0
+
+
+def test_municipio_inativo_no_teste_do_governo_vem_com_dica_de_que_nao_e_a_producao(amb):
+    # Medido em 18/11: Ipu/CE inativo na produção restrita e ativo em produção; o texto cru (E0037) fazia parecer bug.
+    SefinFalsa.roteiro = [sefin.Resposta(True, 400, {"erros": [{"Codigo": "E0037", "Descricao": "município inexistente"}]})]
+    n = _emitir(amb)
+    assert n["erros"][0]["codigo"] == "E0037" and "TESTE" in n["erros"][0]["dica"]
+    assert emissor.com_dicas([{"codigo": "E0037", "mensagem": "x"}], True)[0]["dica"] != n["erros"][0]["dica"]
+    assert emissor.com_dicas([{"codigo": "E9999", "mensagem": "x"}], False) == [{"codigo": "E9999", "mensagem": "x"}]
 
 
 def test_resposta_perdida_fica_desconhecida_e_a_volta_consulta_antes_de_reenviar(amb):
@@ -194,3 +219,95 @@ def test_sem_resposta_do_governo_e_desconhecido_nao_erro():
     r = sefin.Sefin(producao=False, pfx=b"", senha="", host="127.0.0.1", porta=9, contexto=ssl.create_default_context(),
                     timeout=1).enviar_dps("<DPS/>")
     assert r.alcancou is False
+
+
+MOTIVO = "Valor digitado errado na nota"
+
+
+def test_cancelar_nota_emitida_manda_evento_assinado_e_marca_cancelada(amb):
+    SefinFalsa.roteiro = [ok()]
+    n = _emitir(amb)
+    c = amb[1].cancelar(amb[2], amb[3], n["id"], motivo_codigo="1", motivo=MOTIVO, mestra=MESTRA)
+    producao, chave, xml = SefinFalsa.eventos[0]
+    assert c["status"] == "cancelada" and chave == "1" * 50 and "<Signature" in xml and "<e101101>" in xml
+    assert producao is False and "<tpAmb>2</tpAmb>" in xml
+
+
+def test_nota_de_teste_se_cancela_no_teste_mesmo_com_o_servidor_ja_em_producao(amb):
+    # A virada para produção (18/11) não pode mandar o cancelamento de uma nota de teste para a produção.
+    SefinFalsa.roteiro = [ok()]
+    n = _emitir(amb)
+    amb[1].producao = True
+    amb[1].cancelar(amb[2], amb[3], n["id"], motivo_codigo="1", motivo=MOTIVO, mestra=MESTRA)
+    assert SefinFalsa.eventos[0][0] is False and "<tpAmb>2</tpAmb>" in SefinFalsa.eventos[0][2]
+
+
+def test_cancelar_de_novo_nao_manda_segundo_evento(amb):
+    SefinFalsa.roteiro = [ok()]
+    n = _emitir(amb)
+    for _ in range(2):
+        amb[1].cancelar(amb[2], amb[3], n["id"], motivo_codigo="1", motivo=MOTIVO, mestra=MESTRA)
+    assert len(SefinFalsa.eventos) == 1
+
+
+def test_resposta_perdida_no_cancelamento_consulta_o_evento_antes_de_dizer_que_falhou(amb):
+    SefinFalsa.roteiro = [ok()]
+    n = _emitir(amb)
+    SefinFalsa.registrados.add("1" * 50)  # o governo registrou, mas a resposta não voltou
+    SefinFalsa.evento_resposta = sefin.Resposta(False)
+    c = amb[1].cancelar(amb[2], amb[3], n["id"], motivo_codigo="1", motivo=MOTIVO, mestra=MESTRA)
+    assert c["status"] == "cancelada"
+
+
+def test_cancelamento_recusado_mantem_a_nota_emitida_e_devolve_o_erro(amb):
+    SefinFalsa.roteiro = [ok()]
+    n = _emitir(amb)
+    SefinFalsa.evento_resposta = sefin.Resposta(True, 400, {"erros": [{"Codigo": "E0840", "Descricao": "prazo esgotado"}]})
+    with pytest.raises(contas.Erro) as e:
+        amb[1].cancelar(amb[2], amb[3], n["id"], motivo_codigo="1", motivo=MOTIVO, mestra=MESTRA)
+    assert e.value.status == 422 and "E0840" in str(e.value)
+    assert amb[1].nota_por_id(n["id"])["status"] == "emitida"
+
+
+def test_nao_cancela_nota_recusada_nem_com_motivo_curto(amb):
+    SefinFalsa.roteiro = [sefin.Resposta(True, 400, {"erros": [{"Codigo": "E0312", "Descricao": "x"}]}), ok()]
+    recusada = _emitir(amb, PEDIDO | {"ref": "r1"})
+    emitida = _emitir(amb, PEDIDO | {"ref": "r2"})
+    with pytest.raises(contas.Erro) as e1:
+        amb[1].cancelar(amb[2], amb[3], recusada["id"], motivo_codigo="1", motivo=MOTIVO, mestra=MESTRA)
+    with pytest.raises(contas.Erro) as e2:
+        amb[1].cancelar(amb[2], amb[3], emitida["id"], motivo_codigo="1", motivo="curto", mestra=MESTRA)
+    assert e1.value.status == 409 and e2.value.status == 422 and SefinFalsa.eventos == []
+
+
+def test_sem_escolher_ambiente_a_nota_e_de_teste_mesmo_com_o_servidor_permitindo_valor_fiscal(amb):
+    # Nota com valor fiscal só sai quando a pessoa escolhe; o padrão nunca gera imposto por engano.
+    amb[1].producao = True
+    SefinFalsa.roteiro = [ok()]
+    n = _emitir(amb)
+    assert n["producao"] is False and "<tpAmb>2</tpAmb>" in SefinFalsa.enviadas[0]
+
+
+def test_ambiente_producao_escolhido_vai_com_tpamb_1_e_fica_marcado_na_nota(amb):
+    amb[1].producao = True
+    SefinFalsa.roteiro = [ok()]
+    n = _emitir(amb, PEDIDO | {"ambiente": "producao"})
+    assert n["producao"] is True and "<tpAmb>1</tpAmb>" in SefinFalsa.enviadas[0]
+
+
+def test_servidor_sem_producao_recusa_nota_fiscal_antes_de_gastar_cota_ou_enviar(amb):
+    with pytest.raises(contas.Erro) as e:
+        _emitir(amb, PEDIDO | {"ambiente": "producao"})
+    assert e.value.status == 403 and SefinFalsa.enviadas == []
+    assert amb[0].empresa(amb[2], amb[3])["notas_no_mes"] == 0
+
+
+def test_mesmo_ref_em_outro_ambiente_e_recusado_e_ambiente_invalido_e_422(amb):
+    amb[1].producao = True
+    SefinFalsa.roteiro = [sefin.Resposta(True, 400, {"erros": [{"Codigo": "E0312", "Descricao": "x"}]})]
+    _emitir(amb, PEDIDO | {"ref": "p-1"})
+    with pytest.raises(contas.Erro) as e1:
+        _emitir(amb, PEDIDO | {"ref": "p-1", "ambiente": "producao"})
+    with pytest.raises(contas.Erro) as e2:
+        _emitir(amb, PEDIDO | {"ambiente": "homologacao"})
+    assert e1.value.status == 409 and e2.value.status == 422

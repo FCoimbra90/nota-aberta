@@ -26,7 +26,7 @@ import servidor
 
 ENV = {"NOTA_CHAVE_MESTRA": base64.b64encode(MESTRA).decode()}
 LISTA = planos.carregar()
-LISTA[1] = LISTA[1] | {"link_pagar": "lnk_pro"}
+LISTA[2] = LISTA[2] | {"link_pagar": "lnk_pro"}  # Profissional: 3 empresas
 
 
 @pytest.fixture()
@@ -125,7 +125,32 @@ def test_retorno_do_google_com_estado_trocado_e_recusado(app):
 
 def test_planos_publicos_sem_login_e_sem_link_nao_mostram_checkout(app):
     st, corpo, _ = _req(app["url"] + "/conta/planos")
-    assert st == 200 and [p["checkout"] for p in corpo["planos"]] == ["", f"{planos.PAGAR}/p/lnk_pro", ""]
+    esperado = ["", f"{planos.PAGAR}/p/2bykhvut", f"{planos.PAGAR}/p/lnk_pro", f"{planos.PAGAR}/p/pxhgtuvj", f"{planos.PAGAR}/p/8ya9zfcp"]
+    assert st == 200 and [p["checkout"] for p in corpo["planos"]] == esperado
+    assert corpo["sob_medida"]["whatsapp"].isdigit() and "@" in corpo["sob_medida"]["email"]
+
+
+def test_dois_planos_com_a_mesma_cota_de_notas_a_conta_fica_com_o_mais_caro():
+    # Essencial e Profissional têm 300 notas; escolher pela cota daria ao assinante do Profissional só 1 empresa.
+    lista = planos.carregar()
+    links = [{"link": p["link_pagar"], "acesso": True} for p in lista if p["id"] in ("essencial", "profissional")]
+    p = planos.Planos(lista, consultar=lambda e: links).do_email("x@y.com")
+    assert p["id"] == "profissional" and p["empresas"] == 3
+
+
+def test_plano_sem_carencia_nao_promete_teste_gratis():
+    for p in planos.carregar():
+        assert p["teste_dias"] == 0 or p["preco_mes"] > 0, p["id"]
+        assert not (p["teste_dias"] == 0 and any("grátis" in d and "dias" in d for d in p["destaques"])), p["id"]
+
+
+def test_todo_plano_pago_publicado_tem_link_do_pagar_e_o_gratis_nao_cobra():
+    # Plano pago sem link some da tela e ninguém consegue assinar; grátis com link cobraria quem não deve.
+    for p in planos.carregar():
+        if p["preco_mes"] > 0:
+            assert p["link_pagar"].isalnum() and len(p["link_pagar"]) == 8, p["id"]
+        else:
+            assert p["link_pagar"] == "", p["id"]
 
 
 def test_sem_banco_configurado_a_conta_responde_503_e_a_calculadora_segue(monkeypatch):
@@ -186,3 +211,30 @@ def test_sem_danfse_ligado_o_pdf_responde_503_e_nao_quebra():
     with pytest.raises(contas.Erro) as e:
         conta_web.danfse("<NFSe/>", {})
     assert e.value.status == 503
+
+
+def test_cancelar_pela_api_e_pelo_mcp_e_nota_de_outra_empresa_e_404(app):
+    _, emp = _api(app, "POST", "/conta/empresas", {"cnpj": CNPJ, "razao": "Empresa", "municipio_ibge": 4205407})
+    _api(app, "POST", f"/conta/empresas/{emp['id']}/certificado", {"pfx_base64": base64.b64encode(fazer_pfx()).decode(), "senha": SENHA})
+    SefinFalsa.roteiro = [ok("2" * 50), ok("3" * 50)]
+    _, a = _api(app, "POST", f"/conta/empresas/{emp['id']}/notas", {"codigo_servico": "010101", "descricao": "S", "valor": "1", "ref": "a"})
+    _, b = _api(app, "POST", f"/conta/empresas/{emp['id']}/notas", {"codigo_servico": "010101", "descricao": "S", "valor": "1", "ref": "b"})
+    st, c = _api(app, "POST", f"/conta/empresas/{emp['id']}/notas/{a['id']}/cancelar", {"motivo": "Serviço não foi prestado"})
+    assert st == 200 and c["status"] == "cancelada"
+    r = _mcp(app, "cancelar_nfse", {"empresa_id": emp["id"], "nota_id": b["id"], "motivo_codigo": "2", "motivo": "Serviço não foi prestado"})
+    assert r["structuredContent"]["status"] == "cancelada"
+    st, _ = _api(app, "POST", f"/conta/empresas/{emp['id']}/notas/nota_de_outro/cancelar", {"motivo": "Serviço não foi prestado"})
+    assert st == 404
+
+
+def test_nota_listada_traz_o_servico_para_repetir_no_mes_seguinte(app):
+    # Contrato de prefeitura: 80% das notas do contador são a mesma do mês anterior com outra competência.
+    _, emp = _api(app, "POST", "/conta/empresas", {"cnpj": CNPJ, "razao": "Empresa", "municipio_ibge": 4205407})
+    _api(app, "POST", f"/conta/empresas/{emp['id']}/certificado", {"pfx_base64": base64.b64encode(fazer_pfx()).decode(), "senha": SENHA})
+    SefinFalsa.roteiro = [ok()]
+    _api(app, "POST", f"/conta/empresas/{emp['id']}/notas", {"codigo_servico": "171001", "nbs": "115021000", "descricao": "Contrato 12/2026",
+         "valor": "980.00", "competencia": "2026-10-31", "tomador": {"documento": "11222333000181", "nome": "Prefeitura"}})
+    _, lista = _api(app, "GET", f"/conta/empresas/{emp['id']}/notas")
+    s = lista["notas"][0]["servico"]
+    assert (s["codigo_servico"], s["nbs"], s["competencia"], s["tomador"]["nome"]) == ("171001", "115021000", "2026-10-31", "Prefeitura")
+    assert "<dCompet>2026-10-31</dCompet>" in SefinFalsa.enviadas[0] and "<cNBS>115021000</cNBS>" in SefinFalsa.enviadas[0]

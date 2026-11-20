@@ -50,6 +50,29 @@ class Tomador:
     nome: str
     email: str = ""
     telefone: str = ""
+    # Endereço nacional (TCEndereco/endNac do XSD 1.01): vai inteiro ou não vai. Pedido do Beto (contador, 19/11).
+    cep: str = ""
+    municipio_ibge: str = ""
+    logradouro: str = ""
+    numero: str = ""
+    complemento: str = ""
+    bairro: str = ""
+
+
+def _endereco(t: Tomador) -> str:
+    campos = (t.cep, t.municipio_ibge, t.logradouro, t.numero, t.complemento, t.bairro)
+    if not any((c or "").strip() for c in campos):
+        return ""
+    cep, mun = _dig(t.cep), _dig(t.municipio_ibge)
+    if len(cep) != 8:
+        raise DpsInvalida("CEP do tomador tem 8 dígitos")
+    if len(mun) != 7:
+        raise DpsInvalida("município do tomador é o código IBGE de 7 dígitos (o CEP preenche no painel)")
+    if not (t.logradouro or "").strip() or not (t.numero or "").strip() or not (t.bairro or "").strip():
+        raise DpsInvalida("endereço do tomador precisa de logradouro, número e bairro (use S/N sem número)")
+    return _el("end", [_el("endNac", [_el("cMun", mun), _el("CEP", cep)]), _el("xLgr", t.logradouro.strip()[:255]),
+                       _el("nro", t.numero.strip()[:60]), _opt("xCpl", (t.complemento or "").strip()[:156]),
+                       _el("xBairro", t.bairro.strip()[:60])])
 
 
 def _esc(texto: str) -> str:
@@ -110,7 +133,7 @@ def montar(*, producao: bool, prestador: Prestador, serie: str, numero: int, emi
         if len(doc) not in (11, 14):
             raise DpsInvalida("documento do tomador é CPF (11) ou CNPJ (14)")
         toma = _el("toma", [_el("CNPJ" if len(doc) == 14 else "CPF", doc), _el("xNome", tomador.nome.strip()[:300]),
-                            _opt("fone", _dig(tomador.telefone)), _opt("email", tomador.email.strip()[:80])])
+                            _endereco(tomador), _opt("fone", _dig(tomador.telefone)), _opt("email", tomador.email.strip()[:80])])
     ident = id_dps(prestador, serie, numero)
     corpo = "".join([
         _el("tpAmb", "1" if producao else "2"),

@@ -57,7 +57,7 @@ CONTA_FERRAMENTAS = [
      "description": "Emite uma NFS-e nacional pela empresa, com o certificado A1 guardado. Use `ref` (seu id do pedido): "
                     "repetir o mesmo ref nunca gera segunda nota. Status: emitida, recusada (com erros do governo; não "
                     "gasta cota) ou desconhecida (sem resposta do governo; chame de novo com o mesmo ref, que ele consulta "
-                    "antes de reenviar). O servidor diz se está em produção ou em produção restrita (sem valor fiscal).",
+                    "antes de reenviar). `ambiente`: teste (padrão, sem valor fiscal) ou producao (nota com valor fiscal).",
      "inputSchema": {"type": "object", "required": ["empresa_id", "codigo_servico", "descricao", "valor"],
                      "properties": {"empresa_id": {"type": "string"},
                                     "codigo_servico": {"type": "string", "description": "cTribNac, 6 dígitos, ex.: 010101"},
@@ -66,10 +66,26 @@ CONTA_FERRAMENTAS = [
                                     "valor": {"type": "string", "description": "em reais, ex.: 1500.00"},
                                     "competencia": {"type": "string", "description": "AAAA-MM-DD; padrão: hoje"},
                                     "ref": {"type": "string"},
+                                    "ambiente": {"type": "string", "enum": ["teste", "producao"],
+                                                 "description": "teste (padrão, sem valor fiscal) ou producao (valor fiscal)"},
                                     "tomador": {"type": "object", "properties": {"documento": {"type": "string"},
                                                                                  "nome": {"type": "string"},
-                                                                                 "email": {"type": "string"}}}}},
+                                                                                 "email": {"type": "string"},
+                                                                                 "cep": {"type": "string"},
+                                                                                 "municipio_ibge": {"type": "string", "description": "7 dígitos"},
+                                                                                 "logradouro": {"type": "string"},
+                                                                                 "numero": {"type": "string"},
+                                                                                 "complemento": {"type": "string"},
+                                                                                 "bairro": {"type": "string"}}}}},
      "annotations": {"readOnlyHint": False, "destructiveHint": False, "idempotentHint": True, "openWorldHint": True}},
+    {"name": "cancelar_nfse",
+     "description": "Cancela uma NFS-e emitida (evento 101101 no governo, no mesmo ambiente em que ela saiu). motivo_codigo: "
+                    "1 erro na emissão, 2 serviço não prestado, 9 outro; motivo com 15 caracteres ou mais. Não tem volta.",
+     "inputSchema": {"type": "object", "required": ["empresa_id", "nota_id", "motivo"],
+                     "properties": {"empresa_id": {"type": "string"}, "nota_id": {"type": "string"},
+                                    "motivo_codigo": {"type": "string", "enum": ["1", "2", "9"]},
+                                    "motivo": {"type": "string"}}},
+     "annotations": {"readOnlyHint": False, "destructiveHint": True, "idempotentHint": True, "openWorldHint": True}},
     {"name": "listar_notas",
      "description": "Últimas notas da empresa, com status, chave de acesso e erros.",
      "inputSchema": {"type": "object", "required": ["empresa_id"], "properties": {"empresa_id": {"type": "string"}}},
@@ -113,6 +129,9 @@ def executar_conta(nome: str, args: dict, conta) -> object:
     elif nome == "emitir_nfse":
         pedido = {k: v for k, v in args.items() if k != "empresa_id"}
         status, dados = conta("POST", f"/conta/empresas/{eid}/notas", pedido)
+    elif nome == "cancelar_nfse":
+        status, dados = conta("POST", f"/conta/empresas/{eid}/notas/{args.get('nota_id', '')}/cancelar",
+                              {"motivo_codigo": str(args.get("motivo_codigo", "1")), "motivo": str(args.get("motivo", ""))})
     elif nome == "listar_notas":
         status, dados = conta("GET", f"/conta/empresas/{eid}/notas", None)
     else:

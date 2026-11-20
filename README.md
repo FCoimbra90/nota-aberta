@@ -77,6 +77,8 @@ Aponte o seu cliente MCP para `https://<seu-host>/mcp` (Streamable HTTP, só POS
 | `aliquotas_referencia` | alíquotas de referência da CBS, do IBS estadual e do municipal |
 | `versao_motor` | versão do motor e da base de tabelas que está respondendo |
 
+Com `Authorization: Bearer na_...` (chave criada no painel): `listar_empresas`, `emitir_nfse`, `cancelar_nfse` e `listar_notas`.
+
 ## Como funciona
 
 ```
@@ -102,9 +104,10 @@ seria uma segunda cópia da regra fiscal, e ela divergiria da oficial na primeir
 - [x] API e MCP
 - [x] DANFSe: PDF oficial da NFS-e a partir do XML (serviço em Go da Receita, ~0,3 s por nota)
 - [x] Emissor de NFS-e nacional: contas com Google, certificado cifrado, cota, painel, API e MCP
-- [ ] Primeira nota aceita pela Sefin em produção restrita com certificado real (tudo hoje é testado contra um governo falso)
+- [x] Primeira nota aceita pela Sefin: produção restrita em 18/11 e **produção (valor fiscal) em 19/11**, com cancelamento
 - [ ] Simples Nacional (motor 0.0.6 da Receita: já compila e sobe com a mesma base)
-- [ ] Cancelar e substituir nota pela tela (o XML do cancelamento já existe em `dps.py`)
+- [x] Cancelar nota pela tela, pela API e pelo MCP (`cancelar_nfse`; evento 101101 aceito pela Sefin em 18/11)
+- [ ] Substituir nota (cancelar e reemitir numa operação só)
 - [ ] Conferência em lote: suba as notas do seu sistema e veja onde o cálculo diverge do oficial
 
 ## Testes
