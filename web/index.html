@@ -3,67 +3,196 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Nota Aberta</title>
-<meta name="description" content="Emita nota fiscal de serviço (NFS-e nacional) de graça, com o seu certificado A1. Calculadora oficial de CBS e IBS da Receita Federal, API e MCP para agentes de IA. Código aberto, MIT.">
+<meta name="theme-color" content="#000000">
+<title>Nota Aberta: nota fiscal grátis e sem limite</title>
+<meta name="description" content="Emita NFS-e (serviço) e NF-e (produto) de graça e sem limite, com o seu certificado A1. CBS e IBS da Reforma calculados pelo motor oficial da Receita Federal. API e MCP para agentes de IA. Código aberto, MIT.">
 <meta name="robots" content="index, follow">
-<meta property="og:title" content="Nota Aberta: NFS-e grátis e a calculadora oficial da Reforma Tributária">
-<meta property="og:description" content="5 notas por mês de graça, API e MCP. O motor de cálculo é o da Receita Federal, sem alteração.">
-<link rel="stylesheet" href="estilo.css">
+<meta property="og:title" content="Nota Aberta: nota fiscal grátis e sem limite">
+<meta property="og:description" content="NFS-e e NF-e grátis e ilimitadas, já com CBS e IBS da Reforma pelo motor oficial da Receita. API e MCP.">
+<meta property="og:image" content="https://reforma.genesisinnovation.io/img/oficina-1920.webp">
+<meta property="og:url" content="https://reforma.genesisinnovation.io/">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="canonical" href="https://reforma.genesisinnovation.io/">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Nota Aberta","url":"https://reforma.genesisinnovation.io/","applicationCategory":"BusinessApplication","operatingSystem":"Web","description":"Emissor grátis e sem limite de NFS-e nacional e NF-e, com CBS e IBS da Reforma Tributária calculados pelo motor oficial da Receita Federal. API e MCP. Código aberto (MIT).","offers":{"@type":"Offer","price":"0","priceCurrency":"BRL"},"publisher":{"@type":"Organization","name":"Genesis Innovation","url":"https://genesisinnovation.io"}}</script>
+<link rel="preload" as="font" type="font/woff2" href="sora.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="manrope.woff2" crossorigin>
+<link rel="stylesheet" href="landing.css">
 <link rel="icon" href="icone.svg" type="image/svg+xml">
+<link rel="preload" as="image" href="/img/oficina-1920.webp" imagesrcset="/img/oficina-960.webp 960w, /img/oficina-1920.webp 1920w" imagesizes="100vw">
 </head>
 <body>
-<header class="topo heroi">
-  <div class="caixa">
-    <nav class="nav"><strong class="marca">Nota Aberta</strong>
-      <span class="nav-links"><a href="/calculadora.html">Calculadora</a><a href="#precos">Preços</a><a href="https://github.com/thiagopatzdorf/nota-aberta" rel="noopener">GitHub</a><a class="botao-claro" href="/entrar/google" id="entrar">Entrar com Google</a></span>
-    </nav>
-    <p class="selo">NFS-e nacional · CBS e IBS · código aberto</p>
-    <h1>Nota fiscal de serviço de graça. Com o motor da Receita.</h1>
-    <p class="sub">Entre com o Google, suba o certificado A1 da sua empresa uma vez e emita. 5 notas por mês sem pagar nada, API e MCP para o seu sistema ou o seu agente de IA. O imposto é calculado pelo código que a própria Receita Federal abriu.</p>
-    <p class="acoes"><a class="botao-claro grande" href="/entrar/google">Começar grátis</a><a class="link-claro" href="/calculadora.html">ou só calcular CBS e IBS →</a></p>
-  </div>
+<header class="topo">
+  <nav class="nav largura">
+    <span class="marca-grupo"><a class="marca" href="/"><span class="marca-sinal" aria-hidden="true"></span>Nota Aberta</a><a class="por-genesis" href="https://genesisinnovation.io" aria-label="Um produto da Genesis Innovation"><svg viewBox="206.3 191.8 838.4 838.4" aria-hidden="true" fill="currentColor"><path d="M608 1017.6A407 407 0 0 1 608 204.4L608 278A333.5 333.5 0 0 0 608 944ZM534 260H608V511H534ZM347 579H608V655H347ZM534 579H608V960H534ZM647 204.6A407 407 0 0 1 1020 511H943.7A333.5 333.5 0 0 0 647 278.2ZM647 270H720V456.4L1031.5 639.2L1000 712.7L647 505.6ZM1031.5 639.2A407 407 0 0 1 647 1017.4L647 943.8A333.5 333.5 0 0 0 950.9 683.9ZM647 588.4L720 631.2V950H647Z"/></svg><span>por Genesis</span></a></span>
+    <span class="nav-links">
+      <a href="#produtos">Notas</a><a href="#reforma">Reforma</a><a href="#precos">Preços</a><a href="#dev">API e MCP</a>
+      <a class="so-largo" href="/calculadora.html">Calculadora</a>
+      <a class="botao botao-escuro" href="/entrar/google" id="entrar">Entrar</a>
+    </span>
+  </nav>
 </header>
 
-<main class="caixa">
-  <section class="tres">
-    <article class="cartao"><span class="passo">1</span><h2>Entre</h2><p>Login com a sua conta Google. Sem senha nova, sem formulário comprido.</p></article>
-    <article class="cartao"><span class="passo">2</span><h2>Conecte a empresa</h2><p>CNPJ, município e o certificado A1 (.pfx). Ele fica cifrado com uma chave só da sua empresa e você apaga quando quiser.</p></article>
-    <article class="cartao"><span class="passo">3</span><h2>Emita</h2><p>Pela tela, pela API ou por um agente de IA via MCP. Pedido repetido nunca vira nota duplicada.</p></article>
+<main>
+  <section class="heroi">
+    <div class="largura"><div class="heroi-texto">
+      <p class="rotulo">NFS-e · NF-e · Reforma Tributária</p>
+      <h1>Nota fiscal grátis.<br><span class="acento">Sem limite.</span></h1>
+      <p class="sub">Serviço ou produto, de quantas empresas você tiver. Entre com o Google, suba o certificado A1 uma vez e emita pela tela, pela API ou pelo seu agente de IA.</p>
+      <p class="acoes"><a class="botao botao-escuro grande" href="/entrar/google">Começar grátis</a><a class="link" href="/calculadora.html">Calcular CBS e IBS</a></p>
+      <p class="miudo">Sem cartão. Sem teto de notas. Sem teto de CNPJs.</p>
+    </div></div>
+    <figure class="heroi-foto">
+      <picture>
+        <source type="image/webp" srcset="/img/oficina-960.webp 960w, /img/oficina-1920.webp 1920w" sizes="100vw">
+        <img src="/img/oficina-1920.webp" width="1920" height="1080" alt="Ceramista de avental sujo de argila, de pé na oficina, com prateleiras de vasos ao fundo">
+      </picture>
+    </figure>
+    <aside class="selo-nota" aria-label="Nota autorizada pela SEFAZ (homologação, 20/11/2026)">
+      <span class="ponto" aria-hidden="true"></span>
+      <span><strong>NF-e autorizada</strong><small>homologação da SEFAZ · 20/11/2026</small></span>
+    </aside>
   </section>
 
-  <section id="precos">
-    <h2 class="titulo-secao">Preços</h2>
-    <p class="dica centro">Planos pagos sem carência: assinou, usa na hora. Cancela quando quiser.</p>
-    <div class="planos" id="planos"><p class="dica">Carregando os planos…</p></div>
+  <section class="numeros largura" aria-label="O que já foi medido">
+    <div><strong>19/11/2026</strong><span>primeira nota com valor fiscal, emitida por um contador do Ceará</span></div>
+    <div><strong>27 UFs</strong><span>na NF-e de produto, cada uma na sua SEFAZ</span></div>
+    <div><strong>R$ 0</strong><span>notas, empresas, API e MCP, sem teto</span></div>
   </section>
 
-  <section class="cartao">
-    <h2>Para quem desenvolve</h2>
-    <div class="duas">
-      <div><h3>API</h3>
-<pre><code>curl -X POST https://<span class="host">este-site</span>/conta/empresas/&lt;id&gt;/notas \
-  -H "Authorization: Bearer na_..." \
-  -d '{"codigo_servico":"010101","descricao":"Site",
-       "valor":"1500.00","ref":"pedido-42"}'</code></pre></div>
-      <div><h3>MCP</h3>
-<pre><code>https://<span class="host">este-site</span>/mcp
-emitir_nfse · listar_notas · listar_empresas
-calcular_cbs_ibs · tabelas_cbs_ibs
-aliquotas_referencia · versao_motor</code></pre></div>
+  <section class="secao largura" id="produtos">
+    <p class="rotulo">As duas notas</p>
+    <h2>Serviço e produto, no mesmo lugar.</h2>
+    <div class="dupla">
+      <article class="cartao-foto">
+        <picture>
+          <source type="image/webp" srcset="/img/alfaiataria-960.webp 960w, /img/alfaiataria-1440.webp 1440w" sizes="(min-width: 900px) 45vw, 100vw">
+          <img src="/img/alfaiataria-960.webp" width="960" height="540" loading="lazy" alt="Dona de ateliê de costura falando ao telefone enquanto usa o notebook, com manequim e araras de roupa ao fundo">
+        </picture>
+        <div class="cartao-texto">
+          <h3>NFS-e · serviço</h3>
+          <p>O padrão nacional, para MEI, Simples e regime normal, no município da sua empresa.</p>
+          <ul class="lista-check">
+            <li>Repetir a nota do mês com um clique</li>
+            <li>Competência aberta e endereço pelo CEP</li>
+            <li>Retenções: ISS, IRRF, CSLL, INSS, PIS e Cofins</li>
+            <li>Cancelar e PDF oficial (DANFSe)</li>
+          </ul>
+        </div>
+      </article>
+      <article class="cartao-foto">
+        <picture>
+          <source type="image/webp" srcset="/img/padaria-640.webp 640w, /img/padaria-960.webp 960w" sizes="(min-width: 900px) 45vw, 100vw">
+          <img class="retrato" src="/img/padaria-640.webp" width="640" height="960" loading="lazy" alt="Padeiro apoiado no balcão da padaria, ao lado de pães recém-assados">
+        </picture>
+        <div class="cartao-texto">
+          <h3>NF-e · produto</h3>
+          <p>Modelo 55 direto na SEFAZ do seu estado, para empresas do Simples Nacional e MEI.</p>
+          <ul class="lista-check">
+            <li>Vários itens, frete e forma de pagamento</li>
+            <li>Continua a numeração do sistema antigo</li>
+            <li>DANFE em PDF e XML para o contador</li>
+            <li>Nota repetida por engano nunca sai duas vezes</li>
+          </ul>
+        </div>
+      </article>
     </div>
   </section>
 
-  <section class="cartao">
-    <h2>Perguntas que todo mundo faz</h2>
-    <details><summary>É de graça mesmo?</summary><p>Sim: 5 notas de serviço por mês e a calculadora sem limite, para sempre. Quem precisa de mais escolhe um plano pago.</p></details>
-    <details><summary>Que nota dá para emitir?</summary><p>A NFS-e do padrão nacional (nota de serviço), para MEI, Simples Nacional e regime normal, no município onde a empresa está, desde que ele esteja no convênio nacional.</p></details>
+  <section class="reforma" id="reforma">
+    <div class="largura reforma-grade">
+      <div>
+        <p class="rotulo rotulo-claro">Reforma Tributária</p>
+        <h2>A nota já sai com CBS e IBS.</h2>
+        <p class="sub-claro">Você digita o NBS do serviço. O motor que a Receita Federal publicou classifica a operação, e a própria Receita calcula CBS e IBS dentro da nota. Nenhuma fórmula de imposto é nossa.</p>
+        <a class="link link-claro" href="/calculadora.html">Abrir a calculadora oficial</a>
+      </div>
+      <dl class="conta" aria-label="Nota de teste da Receita, 20/11/2026: serviço de R$ 1.000,00 com retenções">
+        <div><dt>Serviço</dt><dd>R$ 1.000,00</dd></div>
+        <div><dt>Base de CBS e IBS</dt><dd>R$ 943,50</dd></div>
+        <div><dt>CBS · 0,9%</dt><dd>R$ 8,49</dd></div>
+        <div><dt>IBS · 0,1%</dt><dd>R$ 0,94</dd></div>
+        <p class="conta-nota">Nota de teste aceita pela Receita em 20/11/2026. A prévia do painel deu o mesmo valor, centavo por centavo.</p>
+      </dl>
+    </div>
+  </section>
+
+  <section class="secao largura">
+    <p class="rotulo">Quanto custa</p>
+    <h2>Emitir nota não devia custar caro.</h2>
+    <div class="comparacao">
+      <div><span class="quem">Emissores com API</span><span class="quanto riscado">R$ 89,90</span><span class="detalhe">a R$ 375 por mês, com teto de 100 a 1.000 notas</span></div>
+      <div class="nosso"><span class="quem">Nota Aberta</span><span class="quanto">R$ 0</span><span class="detalhe">notas e empresas ilimitadas, com API e MCP</span></div>
+    </div>
+  </section>
+
+  <section class="secao largura">
+    <p class="rotulo">Como começa</p>
+    <h2>Três passos.</h2>
+    <ol class="passos">
+      <li><span class="num">01</span><h3>Entre</h3><p>Com a sua conta Google. Sem senha nova.</p></li>
+      <li><span class="num">02</span><h3>Conecte a empresa</h3><p>CNPJ, município e o certificado A1 (.pfx). Você apaga quando quiser.</p></li>
+      <li><span class="num">03</span><h3>Emita</h3><p>Escolha teste ou valor fiscal. Pela tela, pela API ou pelo MCP.</p></li>
+    </ol>
+  </section>
+
+  <section class="secao largura" id="precos">
+    <p class="rotulo">Preços</p>
+    <h2>Grátis e ilimitado.</h2>
+    <p class="lead">Notas, empresas, API e MCP. Sem cartão, sem carência. Se um dia houver cobrança, será pelo armazenamento, com aviso antes.</p>
+    <div class="planos" id="planos"><p class="dica">Carregando os planos…</p></div>
+  </section>
+
+  <section class="secao largura dev" id="dev">
+    <figure class="dev-foto">
+      <picture>
+        <source type="image/webp" srcset="/img/escritorio-960.webp 960w, /img/escritorio-1440.webp 1440w" sizes="(min-width: 900px) 40vw, 100vw">
+        <img src="/img/escritorio-960.webp" width="960" height="540" loading="lazy" alt="Mulher trabalhando no notebook numa mesa clara, perto da janela">
+      </picture>
+    </figure>
+    <div>
+      <p class="rotulo">Para quem desenvolve</p>
+      <h2>Um POST e a nota sai.</h2>
+      <p class="lead">Crie a chave no painel. O MCP serve para qualquer agente de IA: ele emite, lista e cancela sozinho.</p>
+<pre><code>curl -X POST https://<span class="host">este-site</span>/conta/empresas/&lt;id&gt;/notas \
+  -H "Authorization: Bearer na_..." \
+  -d '{"codigo_servico":"010101","nbs":"115021000",
+       "descricao":"Site","valor":"1500.00",
+       "ambiente":"producao","ref":"pedido-42"}'</code></pre>
+      <p class="ferramentas">MCP em <code>https://<span class="host">este-site</span>/mcp</code> · emitir_nfse · emitir_nfe · cancelar_nfse · classificar_nbs · calcular_cbs_ibs</p>
+      <p><a class="botao" href="/docs">Documentação da API e do MCP</a></p>
+    </div>
+  </section>
+
+  <section class="secao largura perguntas">
+    <p class="rotulo">Dúvidas</p>
+    <h2>Perguntas que todo mundo faz.</h2>
+    <details><summary>É de graça mesmo?</summary><p>Sim: notas e empresas ilimitadas, API, MCP e a calculadora, sem pagar nada. Se um dia houver cobrança, será pelo armazenamento das notas guardadas, com aviso antes.</p></details>
+    <details><summary>Que notas dá para emitir?</summary><p>A NFS-e do padrão nacional (serviço), para MEI, Simples Nacional e regime normal, no município da empresa, se ele estiver no convênio nacional. E a NF-e modelo 55 (produto), para empresas do Simples Nacional e MEI, em qualquer estado.</p></details>
+    <details><summary>Já vale como nota de verdade?</summary><p>Sim, quando você escolhe "Valor fiscal" ao emitir. "Teste" manda para o ambiente de teste do governo, sem valor fiscal, para conferir antes.</p></details>
     <details><summary>E o meu certificado?</summary><p>Fica cifrado com AES-256 e uma chave só da sua empresa, que por sua vez é cifrada por uma chave mestra fora do banco. Só o momento do envio abre, em memória. Ele nunca vai para log, e-mail ou arquivo, e some quando você clica em apagar.</p></details>
-    <details><summary>Já vale como nota de verdade?</summary><p>O painel mostra em que ambiente o servidor está. No ambiente de teste do governo (produção restrita) a nota não tem valor fiscal; serve para conferir tudo antes de ligar a produção.</p></details>
     <details><summary>Quem fez?</summary><p>A <a href="https://genesisinnovation.io">Genesis Innovation</a>. O código é aberto (MIT) e o cálculo de CBS e IBS é o da Receita Federal, publicado pela Portaria Cotec 342/2026, sem alteração.</p></details>
   </section>
 
-  <p class="aviso">Este site não é da Receita Federal nem da prefeitura. Resultado informativo; confira com o seu contador. Código em <a href="https://github.com/thiagopatzdorf/nota-aberta" rel="noopener">github.com/thiagopatzdorf/nota-aberta</a>.</p>
+  <section class="final">
+    <picture>
+      <source type="image/webp" srcset="/img/oficina-960.webp 960w, /img/oficina-1920.webp 1920w" sizes="100vw">
+      <img src="/img/oficina-1920.webp" width="1920" height="1080" loading="lazy" alt="">
+    </picture>
+    <div class="final-texto largura">
+      <h2>Emita a primeira nota hoje.</h2>
+      <p>Grátis, sem limite e com o motor oficial da Receita.</p>
+      <a class="botao botao-claro grande" href="/entrar/google">Começar grátis</a>
+    </div>
+  </section>
 </main>
+
+<footer class="rodape largura">
+  <a class="assinatura" href="https://genesisinnovation.io"><svg viewBox="206.3 191.8 838.4 838.4" aria-hidden="true" fill="currentColor"><path d="M608 1017.6A407 407 0 0 1 608 204.4L608 278A333.5 333.5 0 0 0 608 944ZM534 260H608V511H534ZM347 579H608V655H347ZM534 579H608V960H534ZM647 204.6A407 407 0 0 1 1020 511H943.7A333.5 333.5 0 0 0 647 278.2ZM647 270H720V456.4L1031.5 639.2L1000 712.7L647 505.6ZM1031.5 639.2A407 407 0 0 1 647 1017.4L647 943.8A333.5 333.5 0 0 0 950.9 683.9ZM647 588.4L720 631.2V950H647Z"/></svg>Um produto Genesis Innovation</a>
+  <p>Este site não é da Receita Federal nem da prefeitura. Resultado informativo; confira com o seu contador. Código em <a href="https://github.com/thiagopatzdorf/nota-aberta" rel="noopener">github.com/thiagopatzdorf/nota-aberta</a>.</p>
+  <p class="creditos">Fotos do Unsplash: <a href="https://unsplash.com/photos/a-potter-smiles-proudly-in-his-workshop-XbOismtoTXs" rel="noopener">ceramista</a>, <a href="https://unsplash.com/photos/fashion-designer-on-the-phone-working-on-a-laptop-kk4J92iaSBk" rel="noopener">ateliê</a> e <a href="https://unsplash.com/photos/a-woman-sitting-at-a-desk-using-a-laptop-computer-1ZrHX1Kj594" rel="noopener">escritório</a> por <a href="https://unsplash.com/@silverkblack" rel="noopener">Vitaly Gariev</a>; <a href="https://unsplash.com/photos/a-man-leans-on-a-counter-in-his-shop-1rW3RIxLu7E" rel="noopener">padeiro</a> por <a href="https://unsplash.com/@rawanyasser" rel="noopener">Rawan Yasser</a>.</p>
+</footer>
 <script src="landing.js"></script>
 </body>
 </html>

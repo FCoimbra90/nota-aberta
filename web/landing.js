@@ -8,13 +8,13 @@ document.querySelectorAll(".host").forEach((el) => { el.textContent = location.h
 const reais = (v) => Number(v).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 fetch("/conta/planos").then((r) => r.ok ? r.json() : Promise.reject(r.status)).then(({ planos, sob_medida: sm }) => {
-  const meio = Math.min(2, planos.length - 1);
+  const meio = Math.min(1, planos.length - 1);  // o plano do contador, quem traz as empresas
   const cartoes = planos.map((p, i) => `
     <article class="plano${i === meio ? " destaque-plano" : ""}">
       <h3>${esc(p.nome)}</h3>
       <p class="preco">${p.preco_mes ? `R$ ${reais(p.preco_mes)}<span>/mês</span>` : "R$ 0"}</p>
       <ul>${p.destaques.map((d) => `<li>${esc(d)}</li>`).join("")}</ul>
-      <a class="botao${i === meio ? "" : " secundario"}" href="/entrar/google">${!p.preco_mes ? "Começar grátis" : p.teste_dias ? `Testar ${esc(p.teste_dias)} dias` : "Assinar"}</a>
+      <a class="botao${i === meio ? "" : " secundario"}" href="${esc(p.preco_mes && p.checkout ? p.checkout : "/entrar/google")}">${!p.preco_mes ? "Começar grátis" : p.teste_dias ? `Testar ${esc(p.teste_dias)} dias` : "Assinar"}</a>
     </article>`);
   if (sm && sm.texto) {
     const zap = sm.whatsapp ? `https://wa.me/${encodeURIComponent(sm.whatsapp)}?text=${encodeURIComponent("Quero um plano sob medida da Nota Aberta")}` : "";

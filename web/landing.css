@@ -1,0 +1,219 @@
+/* Página oficial da Nota Aberta no visual da Genesis (Filipe, 21/11: "troca o design pelo da Genesis"): fundo preto,
+   azul da marca (#35C6F4), Sora nos títulos, Manrope no texto, JetBrains Mono nos rótulos e cartões de borda fina.
+   As fontes são as mesmas do genesisinnovation.io, servidas daqui (a CSP só aceita 'self'); fotos reais com crédito. */
+@font-face { font-family: Sora; src: url(sora.woff2) format("woff2"); font-weight: 100 800; font-display: swap; }
+@font-face { font-family: Manrope; src: url(manrope.woff2) format("woff2"); font-weight: 200 800; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url(jetbrains-mono.woff2) format("woff2"); font-weight: 400; font-display: swap; }
+:root {
+  --fundo: #000; --fundo-2: #0B0D10; --tinta: #F4F7F8; --suave: rgba(244, 247, 248, .66); --linha: rgba(244, 247, 248, .13);
+  --marca: #35C6F4; --marca-viva: #35C6F4; --escuro: #05060A; --escuro-2: #0B0D10; --claro: #F4F7F8;
+  --solido: #F4F7F8; --sobre-solido: #000;
+  --raio: 22px; --raio-p: 14px;
+  --sombra: 0 1px 2px rgba(0, 0, 0, .4), 0 18px 40px rgba(0, 0, 0, .45);
+  --titulo: Sora, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } * { transition: none !important; } }
+body { margin: 0; background: var(--fundo); color: var(--tinta);
+  font: 400 17px/1.6 Manrope, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+img { display: block; max-width: 100%; height: auto; }
+a { color: inherit; }
+h1, h2, h3 { font-family: var(--titulo); letter-spacing: -.025em; line-height: 1.08; margin: 0; }
+h2 { font-size: clamp(1.9rem, 4vw, 3.1rem); font-weight: 700; margin-bottom: 18px; max-width: 18ch; }
+h3 { font-size: 1.18rem; font-weight: 600; letter-spacing: -.01em; }
+p { margin: 0; }
+code, pre { font-family: var(--mono); }
+
+.largura { width: min(1200px, 100% - 2 * clamp(16px, 5vw, 48px)); margin-inline: auto; }
+.rotulo { font: 400 .75rem/1.4 var(--mono); letter-spacing: .16em; text-transform: uppercase; color: var(--marca); margin-bottom: 16px; }
+.lead { color: var(--suave); font-size: 1.1rem; max-width: 58ch; }
+.miudo { color: var(--suave); font: 400 .78rem/1.5 var(--mono); letter-spacing: .04em; margin-top: 20px; }
+.dica { color: var(--suave); }
+
+/* botões: pílula da Genesis (sólido claro no fundo preto, contorno fino no secundário) */
+.botao { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; height: 46px; padding: 0 22px;
+  font-weight: 600; font-size: .95rem; text-decoration: none; border: 1px solid var(--linha); cursor: pointer;
+  transition: transform .15s ease, background .15s ease, border-color .15s ease; }
+.botao:hover { transform: translateY(-1px); }
+.botao:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--marca); outline-offset: 3px; }
+.botao.grande { height: 54px; padding: 0 30px; font-size: 1.02rem; }
+.botao-escuro { background: var(--solido); color: var(--sobre-solido); border-color: var(--solido); }
+.botao-escuro:hover { background: #fff; }
+.botao-claro { background: var(--solido); color: var(--sobre-solido); border-color: var(--solido); }
+.botao.secundario { background: transparent; color: var(--tinta); }
+.botao.secundario:hover { border-color: var(--tinta); }
+.link { font-weight: 600; text-decoration: none; color: var(--tinta); border-bottom: 1px solid var(--linha); padding-bottom: 3px; transition: border-color .15s ease; }
+.link:hover { border-color: var(--marca); }
+.link::after { content: " →"; color: var(--marca); }
+
+/* topo: barra fina e translúcida, como a do genesisinnovation.io, com o selo "por Genesis" */
+.topo { position: sticky; top: 0; z-index: 10; background: rgba(0, 0, 0, .72);
+  backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); border-bottom: 1px solid var(--linha); }
+.nav { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 60px; }
+.marca-grupo { display: inline-flex; align-items: center; gap: 12px; min-width: 0; }
+.marca { display: inline-flex; align-items: center; gap: 10px; font: 700 1.05rem/1 var(--titulo); text-decoration: none; letter-spacing: -.01em; }
+.marca-sinal { width: 22px; height: 22px; border-radius: 7px; border: 1px solid color-mix(in srgb, var(--marca) 55%, transparent);
+  background: color-mix(in srgb, var(--marca) 14%, transparent); position: relative; }
+.marca-sinal::after { content: ""; position: absolute; inset: 6px 5px; border-top: 2px solid var(--marca); border-bottom: 2px solid var(--marca); }
+.por-genesis { display: inline-flex; align-items: center; gap: 6px; padding-left: 12px; margin-left: 2px; border-left: 1px solid var(--linha);
+  color: var(--suave); font: 400 .68rem/1 var(--mono); letter-spacing: .14em; text-transform: uppercase; text-decoration: none; }
+.por-genesis svg { width: 15px; height: 15px; flex: none; }
+.por-genesis:hover { color: var(--tinta); }
+.nav-links { display: flex; align-items: center; gap: clamp(12px, 2.4vw, 28px); font-size: .92rem; }
+.nav-links a:not(.botao) { text-decoration: none; color: var(--suave); }
+.nav-links a:not(.botao):hover { color: var(--tinta); }
+.nav-links .botao { height: 38px; padding: 0 18px; }
+
+/* herói: a foto ocupa a seção inteira, escurecida da esquerda para a direita (o herói da Genesis) */
+.heroi { position: relative; isolation: isolate; overflow: hidden; display: grid; align-items: center; min-height: min(82vh, 760px);
+  background: var(--escuro); border-bottom: 1px solid var(--linha); }
+.heroi-foto { position: absolute; inset: 0; z-index: -2; margin: 0; }
+.heroi-foto img { width: 100%; height: 100%; object-fit: cover; object-position: 70% 40%; }
+.heroi::before { content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(90deg, rgba(5, 6, 10, .92) 0%, rgba(5, 6, 10, .72) 45%, rgba(5, 6, 10, .2) 100%); }
+.heroi::after { content: ""; position: absolute; inset: auto 0 0; height: 140px; z-index: -1; background: linear-gradient(transparent, var(--fundo)); }
+.heroi-texto { padding-block: clamp(56px, 10vh, 120px); max-width: 620px; }
+h1 { font-size: clamp(2.7rem, 6.2vw, 5.2rem); font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+.acento { color: var(--marca); }
+.sub { color: rgba(244, 247, 248, .84); font-size: clamp(1.05rem, 1.4vw, 1.2rem); margin-top: 24px; max-width: 38ch; }
+.acoes { display: flex; flex-wrap: wrap; align-items: center; gap: 22px; margin-top: 34px; }
+.selo-nota { position: absolute; right: clamp(16px, 5vw, 48px); bottom: clamp(24px, 6vh, 56px); display: flex; align-items: center; gap: 12px;
+  background: rgba(11, 13, 16, .82); color: var(--tinta); border: 1px solid var(--linha); border-radius: 16px; padding: 14px 18px;
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.selo-nota strong { display: block; font-size: .95rem; }
+.selo-nota small { color: var(--suave); font: 400 .72rem/1.4 var(--mono); letter-spacing: .04em; }
+.ponto { width: 10px; height: 10px; border-radius: 50%; background: var(--marca); box-shadow: 0 0 0 5px color-mix(in srgb, var(--marca) 22%, transparent); flex: none; }
+
+/* números */
+.numeros { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--linha); border-bottom: 1px solid var(--linha); }
+.numeros div { padding: 26px 24px 26px 0; }
+.numeros div + div { padding-left: 24px; border-left: 1px solid var(--linha); }
+.numeros strong { display: block; font: 700 clamp(1.5rem, 2.6vw, 2.1rem)/1.2 var(--titulo); letter-spacing: -.03em; color: var(--tinta); }
+.numeros span { color: var(--suave); font-size: .93rem; }
+
+/* seções */
+.secao { padding-block: clamp(64px, 11vh, 128px) 0; }
+.dupla { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 40px; }
+.cartao-foto { background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); overflow: hidden; display: flex; flex-direction: column;
+  transition: border-color .2s ease, transform .2s ease; }
+.cartao-foto:hover { border-color: color-mix(in srgb, var(--marca) 45%, transparent); transform: translateY(-2px); }
+.cartao-foto img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; }
+.cartao-foto img.retrato { object-position: 50% 30%; }
+.cartao-texto { padding: 28px 28px 32px; }
+.cartao-texto h3 { font-size: 1.4rem; margin-bottom: 8px; }
+.cartao-texto > p { color: var(--suave); }
+.lista-check { list-style: none; padding: 0; margin: 20px 0 0; display: grid; gap: 10px; }
+.lista-check li { position: relative; padding-left: 28px; }
+.lista-check li::before { content: ""; position: absolute; left: 0; top: .5em; width: 14px; height: 8px; border-left: 2px solid var(--marca);
+  border-bottom: 2px solid var(--marca); transform: rotate(-45deg); }
+
+/* reforma: o bloco de destaque, num painel com borda e um brilho da cor da marca (a parte que ninguém mais tem) */
+.reforma { background: radial-gradient(80% 120% at 85% 50%, color-mix(in srgb, var(--marca) 10%, transparent), transparent 60%), var(--fundo-2);
+  border-block: 1px solid var(--linha); color: var(--claro); margin-top: clamp(64px, 11vh, 128px); padding-block: clamp(64px, 11vh, 120px); }
+.reforma-grade { display: grid; grid-template-columns: 1.1fr 1fr; gap: clamp(32px, 6vw, 96px); align-items: center; }
+.rotulo-claro { color: var(--marca-viva); }
+.sub-claro { color: var(--suave); font-size: 1.12rem; max-width: 46ch; margin-bottom: 28px; }
+.link-claro { color: #fff; }
+.conta { margin: 0; background: var(--fundo); border: 1px solid var(--linha); border-radius: var(--raio); padding: 12px 28px 22px; }
+.conta div { display: flex; justify-content: space-between; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--linha); }
+.conta dt { color: var(--suave); }
+.conta dd { margin: 0; font-family: var(--mono); font-weight: 400; font-variant-numeric: tabular-nums; font-size: 1.1rem; }
+.conta div:nth-of-type(3) dd, .conta div:nth-of-type(4) dd { color: var(--marca-viva); }
+.conta-nota { color: var(--suave); font-size: .85rem; margin-top: 16px; }
+
+/* comparação */
+.comparacao { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 36px; }
+.comparacao > div { border: 1px solid var(--linha); border-radius: var(--raio); padding: 32px; display: flex; flex-direction: column; gap: 6px; }
+.comparacao .nosso { background: var(--fundo-2); border-color: color-mix(in srgb, var(--marca) 45%, transparent); }
+.quem { color: var(--suave); font-weight: 600; }
+.quanto { font-family: var(--titulo); font-size: clamp(2.8rem, 6vw, 4.4rem); font-weight: 700; letter-spacing: -.04em; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.riscado { color: var(--suave); text-decoration: line-through; text-decoration-thickness: 3px; }
+.nosso .quanto { color: var(--marca); }
+.detalhe { color: var(--suave); }
+
+/* passos */
+.passos { list-style: none; padding: 0; margin: 36px 0 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border-top: 1px solid var(--linha); }
+.passos li { padding: 28px 28px 0 0; }
+.passos li + li { padding-left: 28px; border-left: 1px solid var(--linha); }
+.num { display: block; font: 400 .8rem/1 var(--mono); color: var(--marca); letter-spacing: .16em; margin-bottom: 18px; }
+.passos h3 { margin-bottom: 8px; }
+.passos p { color: var(--suave); }
+
+/* planos (montados pelo landing.js a partir de /conta/planos) */
+.planos { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; margin-top: 36px; }
+.plano { background: var(--fundo-2); border: 1px solid var(--linha); border-radius: var(--raio); padding: 32px; display: flex; flex-direction: column; gap: 10px; }
+.plano.destaque-plano { background: var(--fundo-2); color: var(--tinta); border-color: color-mix(in srgb, var(--marca) 55%, transparent); }
+.plano.destaque-plano .botao { background: var(--solido); color: var(--sobre-solido); border-color: var(--solido); }
+.plano.destaque-plano li { color: var(--suave); }
+.plano h3 { font: 400 .8rem/1.4 var(--mono); text-transform: uppercase; letter-spacing: .16em; color: var(--marca); }
+.preco { font-family: var(--titulo); font-size: 3rem; font-weight: 700; letter-spacing: -.04em; margin: 4px 0 8px; }
+.preco span { font-size: 1rem; font-weight: 500; letter-spacing: 0; }
+.preco-texto { font-size: 1.7rem; }
+.plano ul { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 8px; color: var(--suave); }
+.plano .botao { margin-top: auto; }
+.plano .botao + .botao { margin-top: 8px; }
+
+/* dev */
+.dev { display: grid; grid-template-columns: 1fr 1.15fr; gap: clamp(32px, 6vw, 80px); align-items: center; }
+/* Filho de grid tem min-width:auto: sem isto o <pre> largo empurrava a página para 586 px num celular de 390. */
+.dev > div, .heroi > *, .reforma-grade > *, .dupla > * { min-width: 0; }
+.dev-foto { margin: 0; }
+.dev-foto img { border-radius: var(--raio); aspect-ratio: 4 / 5; object-fit: cover; object-position: 62% 50%; }
+.dev pre { background: var(--fundo-2); border: 1px solid var(--linha); color: #d8e3de; border-radius: var(--raio-p); padding: 22px; overflow-x: auto; font-size: .85rem;
+  line-height: 1.65; margin: 28px 0 0; }
+.ferramentas { color: var(--suave); font-size: .9rem; margin-top: 16px; }
+.ferramentas code { color: var(--tinta); font-size: .85rem; overflow-wrap: anywhere; }
+
+/* perguntas */
+.perguntas details { border-top: 1px solid var(--linha); padding: 22px 0; max-width: 820px; }
+.perguntas details:last-of-type { border-bottom: 1px solid var(--linha); }
+.perguntas summary { cursor: pointer; font-family: var(--titulo); font-weight: 600; font-size: 1.12rem; list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.perguntas summary::-webkit-details-marker { display: none; }
+.perguntas summary::after { content: "+"; color: var(--marca); font-weight: 400; font-size: 1.4rem; line-height: 1; transition: transform .2s ease; }
+.perguntas details[open] summary::after { transform: rotate(45deg); }
+.perguntas details p { color: var(--suave); margin-top: 12px; max-width: 70ch; }
+.perguntas a { color: var(--marca); }
+
+/* chamada final: a foto do topo de volta, escurecida */
+.final { position: relative; margin-top: clamp(72px, 12vh, 140px); min-height: 460px; display: grid; align-items: center; overflow: hidden; color: #fff; }
+.final picture, .final img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 50% 35%; }
+.final::before { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(90deg, rgba(5, 6, 10, .9), rgba(5, 6, 10, .45)); }
+.final-texto { position: relative; z-index: 2; padding-block: 72px; }
+.final h2 { max-width: 14ch; }
+.final p { color: rgba(244, 247, 248, .84); font-size: 1.15rem; margin-bottom: 30px; }
+
+.rodape { color: var(--suave); font-size: .86rem; padding-block: 36px 48px; display: grid; gap: 10px; }
+.assinatura { display: inline-flex; align-items: center; gap: 10px; color: var(--tinta); text-decoration: none; font: 400 .72rem/1 var(--mono);
+  letter-spacing: .16em; text-transform: uppercase; margin-bottom: 8px; width: fit-content; }
+.assinatura svg { width: 22px; height: 22px; }
+.assinatura:hover { color: var(--marca); }
+.rodape a { color: var(--tinta); }
+.creditos { font-size: .8rem; }
+
+@media (max-width: 900px) {
+  .reforma-grade, .dev { grid-template-columns: 1fr; }
+  .heroi { min-height: 0; align-items: end; }
+  .heroi-foto img { object-position: 72% 30%; }
+  .heroi::before { background: linear-gradient(0deg, rgba(5, 6, 10, .95) 0%, rgba(5, 6, 10, .78) 55%, rgba(5, 6, 10, .35) 100%); }
+  .heroi-texto { padding-block: 120px 150px; }  /* abaixo do texto cabe o selo da NF-e sem encostar */
+  .selo-nota { right: auto; left: clamp(16px, 5vw, 48px); bottom: 24px; padding: 10px 14px; }
+  .dupla, .comparacao { grid-template-columns: 1fr; }
+  .dev-foto img { aspect-ratio: 16 / 10; }
+  .so-largo { display: none; }
+}
+@media (max-width: 640px) {
+  body { font-size: 16px; }
+  .nav-links a:not(.botao):not(.so-largo) { display: none; }
+  .por-genesis span { display: none; }
+  .numeros { grid-template-columns: 1fr; }
+  .numeros div, .numeros div + div { padding: 18px 0; border-left: 0; }
+  .numeros div + div { border-top: 1px solid var(--linha); }
+  .passos { grid-template-columns: 1fr; }
+  .passos li, .passos li + li { padding: 24px 0; border-left: 0; }
+  .passos li + li { border-top: 1px solid var(--linha); }
+  .comparacao > div, .plano, .cartao-texto { padding: 24px; }
+}

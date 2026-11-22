@@ -30,6 +30,8 @@
         <label>Empresa <select name="empresa" required></select></label>
         <label>Código de tributação nacional <input name="codigo_servico" inputmode="numeric" pattern="\d{6}" placeholder="010101" required></label>
         <label>Valor (R$) <input name="valor" inputmode="decimal" placeholder="1500,00" required></label>
+        <label id="l-simples" hidden>Alíquota do Simples (%) <input name="aliquota_simples" inputmode="decimal" placeholder="6,00"
+          title="Percentual aproximado dos tributos do Simples Nacional, como no emissor oficial (vazio = 0)"></label>
         <label class="largo3">Descrição do serviço <input name="descricao" maxlength="2000" required></label>
         <label>CPF/CNPJ do tomador <input name="doc" inputmode="numeric"></label>
         <label>Nome do tomador <input name="nome"></label>
@@ -46,7 +48,27 @@
           </div>
         </details>
         <label>Competência (quando o serviço foi prestado) <input name="competencia" type="date" required></label>
-        <label>NBS (opcional, 9 dígitos) <input name="nbs" inputmode="numeric" pattern="\d{9}" placeholder="115021000"></label>
+        <label>NBS (9 dígitos, liga o IBS/CBS) <input name="nbs" inputmode="numeric" pattern="\d{9}" placeholder="115021000"></label>
+        <div class="largo3 rtc" id="rtc" hidden>
+          <p class="rtc-titulo"><strong>Reforma Tributária</strong> · CBS e IBS classificados pelo motor oficial da Receita</p>
+          <p id="rtc-classe"></p>
+          <label id="rtc-escolha" hidden>Este NBS tem mais de uma classificação: escolha <select name="classe_rtc"></select></label>
+          <p id="rtc-previa" class="rtc-previa"></p>
+          <label class="opcao-linha"><input type="checkbox" name="sem_rtc"> Emitir sem o grupo IBS/CBS</label>
+        </div>
+        <details class="largo3" id="retencoes"><summary>Retenções na fonte (Lucro Real, Presumido, órgão público)</summary>
+          <div class="grade3">
+            <label class="opcao-linha"><input type="checkbox" name="iss_retido"> ISS retido pelo tomador</label>
+            <label>Alíquota do ISS (%) <input name="aliquota_iss" inputmode="decimal" placeholder="2,00"></label>
+            <label>IRRF (R$) <input name="irrf" inputmode="decimal" placeholder="0,00"></label>
+            <label>CSLL (R$) <input name="csll" inputmode="decimal" placeholder="0,00"></label>
+            <label>INSS (R$) <input name="inss" inputmode="decimal" placeholder="0,00"></label>
+            <label>PIS (R$) <input name="pis" inputmode="decimal" placeholder="0,00"></label>
+            <label>Cofins (R$) <input name="cofins" inputmode="decimal" placeholder="0,00"></label>
+            <label class="opcao-linha largo"><input type="checkbox" name="pis_cofins_retidos"> PIS e Cofins retidos pelo tomador</label>
+            <p class="dica largo3" id="r-liquido"></p>
+          </div>
+        </details>
         <p class="dica largo3" id="dica-repetir" hidden></p>
         <fieldset class="largo3 ambiente-escolha"><legend>Tipo de nota</legend>
           <label class="opcao"><input type="radio" name="ambiente" value="teste" checked><span><strong>Teste</strong> · sem valor fiscal, vai para o ambiente de teste do governo</span></label>
@@ -54,6 +76,62 @@
         </fieldset>
         <div class="largo3 acoes"><button type="submit" id="b-emitir">Emitir nota de teste</button><span class="dica" id="r-emitir"></span></div>
       </form>
+    </section>
+
+    <section class="cartao" id="nfe">
+      <h2>Nota de produto (NF-e)</h2>
+      <p class="dica">Venda de mercadoria, modelo 55, direto na SEFAZ do estado da empresa. Simples Nacional e MEI.</p>
+      <label>Empresa <select name="empresa" id="nfe-empresa"></select></label>
+      <details id="nfe-cadastro-caixa"><summary id="nfe-cadastro-resumo">Cadastro da NF-e da empresa</summary>
+        <form id="f-nfe-cadastro" class="grade3">
+          <label>Inscrição estadual <input name="ie" inputmode="numeric" required></label>
+          <label>Nome fantasia (opcional) <input name="fantasia" maxlength="60"></label>
+          <label>Telefone (opcional) <input name="telefone" inputmode="tel"></label>
+          <label>CEP <input name="cep" inputmode="numeric" required></label>
+          <label class="largo">Logradouro <input name="logradouro" maxlength="60" required></label>
+          <label>Número <input name="numero" maxlength="60" required placeholder="S/N"></label>
+          <label>Complemento <input name="complemento" maxlength="60"></label>
+          <label>Bairro <input name="bairro" maxlength="60" required></label>
+          <label>Município <input name="municipio" maxlength="60" required></label>
+          <label>Série de teste <input name="serie_teste" inputmode="numeric" placeholder="1"></label>
+          <label>Série com valor fiscal <input name="serie_producao" inputmode="numeric" placeholder="1"></label>
+          <label>Próximo número (valor fiscal) <input name="proximo_producao" inputmode="numeric"></label>
+          <p class="dica largo3">Já emite NF-e em outro sistema? Use outra série ou continue a numeração de lá no "próximo número" (ele só sobe).</p>
+          <div class="largo3 acoes"><button type="submit" class="secundario">Salvar cadastro</button><span class="dica" id="r-nfe-cadastro"></span></div>
+        </form>
+      </details>
+      <form id="f-nfe" class="grade3">
+        <label>CPF/CNPJ do destinatário <input name="documento" inputmode="numeric" required></label>
+        <label>Nome do destinatário <input name="nome" maxlength="60" required></label>
+        <label>IE do destinatário (vazio = não contribuinte) <input name="ie" inputmode="numeric"></label>
+        <label>E-mail (opcional) <input name="email" type="email"></label>
+        <label>CEP <input name="cep" inputmode="numeric" required></label>
+        <label>Logradouro <input name="logradouro" maxlength="60" required></label>
+        <label>Número <input name="numero" maxlength="60" required placeholder="S/N"></label>
+        <label>Complemento <input name="complemento" maxlength="60"></label>
+        <label>Bairro <input name="bairro" maxlength="60" required></label>
+        <label>Município <input name="municipio" readonly tabindex="-1" placeholder="sai do CEP"><input name="municipio_ibge" type="hidden"><input name="uf" type="hidden"></label>
+        <p class="dica largo3" id="r-nfe-cep"></p>
+        <div class="largo3">
+          <table class="itens-nfe"><thead><tr><th>Código</th><th>Descrição</th><th>NCM</th><th class="num">Qtd.</th><th class="num">Valor un. (R$)</th><th>CSOSN</th><th></th></tr></thead>
+            <tbody id="nfe-itens"></tbody></table>
+          <button type="button" class="secundario mini" id="nfe-mais-item">+ item</button>
+        </div>
+        <label>Frete (R$) <input name="frete" inputmode="decimal" placeholder="0,00"></label>
+        <label>Pagamento <select name="forma_pagamento">
+          <option value="pix">Pix</option><option value="credito">Cartão de crédito</option><option value="debito">Cartão de débito</option>
+          <option value="boleto">Boleto</option><option value="dinheiro">Dinheiro</option><option value="transferencia">Transferência</option>
+          <option value="deposito">Depósito</option><option value="sem_pagamento">Sem pagamento</option></select></label>
+        <label class="opcao-linha"><input type="checkbox" name="presencial"> Venda presencial</label>
+        <label class="largo3">Informações complementares (opcional) <input name="informacoes" maxlength="2000"></label>
+        <p class="largo3 nfe-total" id="nfe-total"></p>
+        <fieldset class="largo3 ambiente-escolha"><legend>Tipo de nota</legend>
+          <label class="opcao"><input type="radio" name="ambiente" value="teste" checked><span><strong>Teste</strong> · homologação da SEFAZ, sem valor fiscal</span></label>
+          <label class="opcao"><input type="radio" name="ambiente" value="producao"><span><strong>Valor fiscal</strong> · nota de verdade, gera imposto</span></label>
+        </fieldset>
+        <div class="largo3 acoes"><button type="submit" id="b-nfe">Emitir NF-e de teste</button><span class="dica" id="r-nfe"></span></div>
+      </form>
+      <div id="nfe-notas"></div>
     </section>
 
     <section class="cartao">
@@ -95,6 +173,23 @@
       <button type="submit" class="secundario">Guardar certificado</button>
       <button type="button" class="secundario apagar-cert" hidden>Apagar certificado</button>
       <span class="dica r-cert"></span>
+    </form>
+    <form class="f-fiscal acoes">
+      <label>Inscrição municipal <input name="inscricao_municipal" maxlength="20" autocomplete="off" placeholder="só se a prefeitura pede"></label>
+      <label>Regime especial (ISS)
+        <select name="regime_especial">
+          <option value="0">Nenhum</option>
+          <option value="1">Ato cooperado (cooperativa)</option>
+          <option value="2">Estimativa</option>
+          <option value="3">Microempresa municipal</option>
+          <option value="4">Notário ou registrador</option>
+          <option value="5">Profissional autônomo</option>
+          <option value="6">Sociedade de profissionais (ISS fixo por profissional)</option>
+          <option value="9">Outros</option>
+        </select>
+      </label>
+      <button type="submit" class="secundario">Salvar dados fiscais</button>
+      <span class="dica r-fiscal"></span>
     </form>
   </article>
 </template>

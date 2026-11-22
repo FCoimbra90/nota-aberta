@@ -129,7 +129,7 @@ def test_health_responde_503_quando_o_motor_esta_fora(monkeypatch):
 
 def test_pagina_tem_csp_e_estatico_nao_escapa_da_pasta_web(porta):
     st, corpo, cab = _req(porta + "/")
-    assert st == 200 and "Nota fiscal de serviço de graça".encode() in corpo
+    assert st == 200 and "grátis e ilimitada".encode() in corpo
     assert b"Calculadora de CBS e IBS" in _req(porta + "/calculadora.html")[1]
     assert "script-src 'self'" in cab["Content-Security-Policy"]
     assert _req(porta + "/../servidor.py")[0] == 404
@@ -177,8 +177,8 @@ def test_mcp_lista_calculo_so_leitura_e_emissao_marcada_como_escrita(porta):
     st, r = _rpc(porta, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
     ferramentas = {f["name"]: f["annotations"]["readOnlyHint"] for f in r["result"]["tools"]}
     assert st == 200 and ferramentas == {"calcular_cbs_ibs": True, "tabelas_cbs_ibs": True, "aliquotas_referencia": True,
-                                         "versao_motor": True, "listar_empresas": True, "emitir_nfse": False, "cancelar_nfse": False,
-                                         "listar_notas": True}
+                                         "classificar_nbs": True, "versao_motor": True, "listar_empresas": True, "editar_empresa": False, "conferir_nfse": True, "emitir_nfse": False, "cancelar_nfse": False,
+                                         "cadastro_nfe": False, "emitir_nfe": False, "listar_nfe": True, "listar_notas": True}
 
 
 def test_mcp_calcular_repassa_a_operacao_ao_motor_oficial_sem_mexer(porta):
@@ -233,3 +233,89 @@ def test_calculadora_liga_os_ouvintes_antes_de_esperar_as_tabelas():
     js = (AQUI / "web" / "app.js").read_text(encoding="utf-8")
     corpo = js[js.index("async function iniciar()"):]
     assert corpo.index('$("#uf").addEventListener') < corpo.index("await ")
+
+
+def test_consultas_de_nfse_do_motor_sao_publicas_mas_so_as_de_leitura_listadas():
+    for rota in ("situacoes-classificacoes-tributarias", "indicador-operacao", "local-operacao", "locais-incidencia"):
+        assert servidor.permitida("GET", f"/calculadora/nfse/{rota}")
+    assert not servidor.permitida("GET", "/calculadora/nfse/../../actuator/env")
+    assert not servidor.permitida("GET", "/calculadora/nfse/qualquer-outra")
+
+
+def test_mcp_classificar_nbs_devolve_as_opcoes_do_motor_e_recusa_nbs_mal_formado():
+    import mcp
+
+    def chamar(metodo, api, dados):
+        if "situacoes" in api:
+            return 200, [{"codigoSituacaoTributaria": "000", "codigoClassificacaoTributaria": "000001",
+                          "descricaoClassificacaoTributaria": "integral"}]
+        return 200, [{"cIndOp": "100301", "tipoOperacao": "Demais serviços", "localIncidencia": "Tomador"}]
+    r = mcp.executar("classificar_nbs", {"nbs": "115021000", "data": "2026-11-20"}, chamar)
+    assert r["classificacoes"][0]["cclass_trib"] == "000001" and r["indicadores"][0]["cind_op"] == "100301"
+    with pytest.raises(mcp.ErroFerramenta):
+        mcp.executar("classificar_nbs", {"nbs": "11502", "data": "2026-11-20"}, chamar)
+
+
+def test_fotos_da_pagina_saem_de_img_como_webp_e_so_essa_pasta_abre(porta):
+    st, corpo, cab = _req(porta + "/img/oficina-960.webp")
+    assert st == 200 and cab["Content-Type"] == "image/webp" and corpo[:4] == b"RIFF" and "max-age" in cab["Cache-Control"]
+    assert _req(porta + "/img/../servidor.py")[0] == 404
+    assert _req(porta + "/tests/test_servidor.py")[0] == 404
+
+
+def test_toda_foto_da_pagina_existe_e_tem_credito_no_rodape():
+    import re as _re
+    html = (servidor.WEB / "index.html").read_text()
+    fotos = set(_re.findall(r"/img/([a-z]+)-\d+\.webp", html))
+    assert fotos and all((servidor.WEB / "img" / f"{f}-960.webp").exists() or any((servidor.WEB / "img").glob(f"{f}-*.webp")) for f in fotos)
+    for usado in _re.findall(r'/img/([a-z\-0-9]+\.webp)', html):
+        assert (servidor.WEB / "img" / usado).is_file(), usado
+    import json as _json
+    creditos = _json.loads((servidor.WEB / "img" / "creditos.json").read_text())
+    for foto in fotos:  # toda foto usada tem autor e página no creditos.json, e o perfil do autor aparece no rodapé
+        assert foto in creditos and creditos[foto]["perfil"] in html, foto
+
+
+def test_css_e_js_da_pagina_saem_com_o_hash_do_conteudo_para_cache_velho_nao_servir_estilo_antigo(porta):
+    # 21/11: a Cloudflare deixa o CSS 4 h no navegador; sem o hash, a página nova saiu com o landing.css velho.
+    import hashlib
+    import re as _re
+    st, html, _ = _req(porta + "/")
+    assert st == 200
+    pedidos = _re.findall(rb'(?:href|src)="([a-z]+\.(?:css|js))\?v=([0-9a-f]{10})"', html)
+    assert {p[0] for p in pedidos} >= {b"landing.css", b"landing.js"}
+    for nome, v in pedidos:
+        assert hashlib.sha256((servidor.WEB / nome.decode()).read_bytes()).hexdigest()[:10] == v.decode()
+        st, corpo, _ = _req(porta + f"/{nome.decode()}?v={v.decode()}")
+        assert st == 200 and corpo == (servidor.WEB / nome.decode()).read_bytes()
+    assert not _re.search(rb'(?:href|src)="[a-z]+\.(?:css|js)"', html), "CSS/JS local sem carimbo"
+
+
+def test_carimbo_muda_quando_o_arquivo_muda(tmp_path, monkeypatch):
+    (tmp_path / "a.css").write_text("body{color:red}")
+    monkeypatch.setattr(servidor, "WEB", tmp_path)
+    um = servidor.carimbar(b'<link href="a.css"><script src="nao-existe.js"></script>')
+    (tmp_path / "a.css").write_text("body{color:blue}")
+    dois = servidor.carimbar(b'<link href="a.css">')
+    assert b'a.css?v=' in um and b'src="nao-existe.js"' in um and um.split(b'"')[1] != dois.split(b'"')[1]
+
+
+def test_fonte_da_genesis_que_a_pagina_pede_nao_existe_ou_sai_sem_tipo_de_fonte(porta):
+    # 21/11 (visual da Genesis): o landing.css pede Sora, Manrope e JetBrains Mono servidas daqui (a CSP só aceita
+    # 'self'). Arquivo faltando cai na fonte do sistema sem erro visível; como octet-stream + nosniff o Firefox recusa.
+    import re as _re
+    css = (servidor.WEB / "landing.css").read_text()
+    fontes = _re.findall(r"url\(([a-z\-]+\.woff2)\)", css)
+    assert {"sora.woff2", "manrope.woff2", "jetbrains-mono.woff2"} <= set(fontes)
+    for nome in fontes:
+        st, corpo, cab = _req(porta + f"/{nome}")
+        assert st == 200 and cab["Content-Type"] == "font/woff2" and corpo[:4] == b"wOF2", nome
+
+
+def test_pagina_sem_a_assinatura_da_genesis():
+    # Filipe, 21/11: a Nota Aberta é produto da Genesis e usa o visual dela; o topo e o rodapé levam ao site da Genesis.
+    html = (servidor.WEB / "index.html").read_text()
+    assert html.count('href="https://genesisinnovation.io"') >= 2
+    assert 'class="por-genesis"' in html and 'class="assinatura"' in html
+    css = (servidor.WEB / "landing.css").read_text()
+    assert "--marca: #35C6F4" in css and "--fundo: #000" in css

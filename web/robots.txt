@@ -1,0 +1,9 @@
+# Nota Aberta: tudo que é público pode ser indexado. Conta, operação e API de emissão são de quem entrou.
+User-agent: *
+Allow: /
+Disallow: /conta/
+Disallow: /entrar/
+Disallow: /operacao
+Disallow: /painel.html
+
+Sitemap: https://reforma.genesisinnovation.io/sitemap.xml

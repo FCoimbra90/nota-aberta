@@ -21,16 +21,28 @@ import oauth
 import planos as planos_mod
 from contas import Contas, Erro
 from emissor import Emissor
+from emissor_nfe import EmissorNfe
 
 COOKIE = "na_sessao"
 COOKIE_OAUTH = "na_oauth"
+COOKIE_VOLTA = "na_volta"
+VOLTAS = ("/operacao",)
 
 
 class Resultado:
     def __init__(self, status: int, corpo: object = None, *, redirecionar: str = "", cookies: list[str] | None = None,
-                 bruto: bytes | None = None, tipo: str = ""):
+                 bruto: bytes | None = None, tipo: str = "", arquivo: str = ""):
         self.status, self.corpo, self.redirecionar, self.cookies = status, corpo, redirecionar, cookies or []
-        self.bruto, self.tipo = bruto, tipo
+        self.bruto, self.tipo, self.arquivo = bruto, tipo, arquivo  # arquivo: nome do download (só [A-Za-z0-9.-])
+
+
+def danfe(nfe_proc: str) -> bytes:
+    """DANFE (PDF da NF-e) pela BrazilFiscalReport (LGPL, a mesma do emissor da casa), a partir do nfeProc autorizado."""
+    try:
+        from brazilfiscalreport.danfe import Danfe
+    except ImportError:
+        raise Erro(503, "danfe_desligado", "o gerador de DANFE não está instalado neste servidor; baixe o XML") from None
+    return bytes(Danfe(xml=nfe_proc).output())
 
 
 def danfse(nfse_xml: str, env: dict) -> bytes:
@@ -55,10 +67,12 @@ def _cookie(nome: str, valor: str, idade: int) -> str:
 
 class Conta:
     def __init__(self, contas: Contas, *, base: str, planos: planos_mod.Planos | None = None, emissor: Emissor | None = None,
+                 emissor_nfe: EmissorNfe | None = None,
                  env: dict | None = None):
         self.c, self.base, self.env = contas, base.rstrip("/"), env if env is not None else os.environ
         self.planos = planos or planos_mod.Planos()
         self.emissor = emissor or Emissor(contas, producao=self.env.get("NOTA_PRODUCAO") == "1")
+        self.emissor_nfe = emissor_nfe or EmissorNfe(contas, producao=self.emissor.producao)
 
     # ---------------------------------------------------------------- portas
 
@@ -116,15 +130,21 @@ class Conta:
             if not oauth.configurado("google"):
                 raise Erro(503, "login_indisponivel", "o login com Google ainda não está configurado neste servidor")
             url, estado = oauth.iniciar("google", self.base)
-            return Resultado(302, redirecionar=url, cookies=[_cookie(COOKIE_OAUTH, estado, 600)])
+            # Volta depois do login só para destinos da lista (nunca um endereço livre: seria redirecionamento aberto).
+            volta = q.get("volta", [""])[0]
+            cookies = [_cookie(COOKIE_OAUTH, estado, 600)] + ([_cookie(COOKIE_VOLTA, volta.strip("/"), 600)]
+                                                              if volta in VOLTAS else [])
+            return Resultado(302, redirecionar=url, cookies=cookies)
         if caminho == "/entrar/google/retorno" and m == "GET":
             estado, _, verif = self._cookies(cab).get(COOKIE_OAUTH, "").partition(".")
             if not estado or q.get("state", [""])[0] != estado:
                 raise Erro(400, "estado_invalido", "o login expirou ou veio de outra aba; tente de novo")
             ident = oauth.identidade("google", q.get("code", [""])[0], self.base, verif)
             u = self.c.entrar_google(ident)
-            return Resultado(302, redirecionar="/painel.html",
-                             cookies=[_cookie(COOKIE, self.c.emitir_sessao(u["id"]), 14 * 24 * 3600), _cookie(COOKIE_OAUTH, "", 0)])
+            volta = "/" + self._cookies(cab).get(COOKIE_VOLTA, "")
+            return Resultado(302, redirecionar=volta if volta in VOLTAS else "/painel.html",
+                             cookies=[_cookie(COOKIE, self.c.emitir_sessao(u["id"]), 14 * 24 * 3600), _cookie(COOKIE_OAUTH, "", 0),
+                                      _cookie(COOKIE_VOLTA, "", 0)])
         if caminho == "/sair":
             return Resultado(302, redirecionar="/", cookies=[_cookie(COOKIE, "", 0)])
         if caminho == "/conta/planos" and m == "GET":
@@ -144,14 +164,16 @@ class Conta:
         if partes == ["empresas"] and m == "POST":
             d = self._json(corpo)
             plano = self.planos.do_email(u["email"])
-            if len(self.c.empresas(u["id"])) >= plano["empresas"]:
+            if plano["empresas"] is not None and len(self.c.empresas(u["id"])) >= plano["empresas"]:
                 raise Erro(402, "limite_empresas", f"o plano {plano['nome']} permite {plano['empresas']} empresa(s)")
             try:
                 ibge = int(d.get("municipio_ibge", 0))
             except (TypeError, ValueError):
                 raise Erro(422, "municipio_invalido", "código IBGE do município tem 7 dígitos") from None
             return Resultado(201, self.c.cadastrar_empresa(u["id"], str(d.get("cnpj", "")), str(d.get("razao", "")),
-                                                            ibge, str(d.get("regime", "simples"))))
+                                                            ibge, str(d.get("regime", "simples")),
+                                                            str(d.get("inscricao_municipal") or ""),
+                                                            str(d.get("regime_especial") or "0")))
         if len(partes) >= 2 and partes[0] == "empresas":
             return self._empresa(m, u, partes[1], partes[2:], corpo)
         if partes == ["chaves"] and m == "POST":
@@ -166,6 +188,10 @@ class Conta:
             raise Erro(404, "empresa_nao_encontrada", "empresa não encontrada")
         if resto == [] and m == "GET":
             return Resultado(200, self.c.empresa(u["id"], eid))
+        if resto == [] and m == "PATCH":  # só inscricao_municipal e regime_especial; o resto do corpo é ignorado
+            d = self._json(corpo)
+            return Resultado(200, self.c.editar_empresa(u["id"], eid, {k: d[k] for k in ("inscricao_municipal", "regime_especial")
+                                                                     if k in d}))
         if resto == ["certificado"] and m == "POST":
             d = self._json(corpo)
             try:
@@ -177,6 +203,8 @@ class Conta:
             return Resultado(200, {"apagado": self.c.apagar_certificado(u["id"], eid)})
         if resto == ["notas"] and m == "GET":
             return Resultado(200, {"notas": self.emissor.notas(u["id"], eid)})
+        if resto == ["notas", "conferir"] and m == "POST":
+            return Resultado(200, self.emissor.conferir(u["id"], eid, self._json(corpo)))
         if resto == ["notas"] and m == "POST":
             plano = self.planos.do_email(u["email"])
             nota = self.emissor.emitir(u["id"], eid, self._json(corpo), limite_mes=plano["notas_mes"], mestra=self._mestra())
@@ -192,4 +220,26 @@ class Conta:
             if not linha or not linha[0]:
                 raise Erro(404, "nota_sem_xml", "nota não emitida ou sem o XML da NFS-e")
             return Resultado(200, bruto=danfse(linha[0], self.env), tipo="application/pdf")
+        if resto and resto[0] == "nfe":
+            return self._nfe(m, u, eid, resto[1:], corpo)
         raise Erro(404, "rota_inexistente", "rota da empresa não existe")
+
+    def _nfe(self, m: str, u: dict, eid: str, resto: list[str], corpo: bytes) -> Resultado:
+        """NF-e de produto: /conta/empresas/<eid>/nfe[/cadastro | /<nota>/xml | /<nota>/pdf]."""
+        e = self.emissor_nfe
+        if resto == ["cadastro"] and m == "GET":
+            return Resultado(200, e.cadastro(u["id"], eid))
+        if resto == ["cadastro"] and m == "PUT":
+            return Resultado(200, e.salvar_cadastro(u["id"], eid, self._json(corpo)))
+        if resto == [] and m == "GET":
+            return Resultado(200, {"notas": e.notas(u["id"], eid)})
+        if resto == [] and m == "POST":
+            plano = self.planos.do_email(u["email"])
+            nota = e.emitir(u["id"], eid, self._json(corpo), limite_mes=plano["notas_mes"], mestra=self._mestra())
+            return Resultado(201 if nota["status"] == "emitida" else 202, nota)
+        if len(resto) == 2 and resto[1] in ("xml", "pdf") and m == "GET":
+            chave, xml = e.xml(u["id"], eid, resto[0])
+            if resto[1] == "xml":
+                return Resultado(200, bruto=xml.encode(), tipo="application/xml", arquivo=f"{chave}-nfe.xml")
+            return Resultado(200, bruto=danfe(xml), tipo="application/pdf", arquivo=f"{chave}-danfe.pdf")
+        raise Erro(404, "rota_inexistente", "rota da NF-e não existe")

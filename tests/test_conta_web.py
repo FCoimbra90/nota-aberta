@@ -16,17 +16,23 @@ sys.path.insert(0, str(AQUI))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from test_contas import CNPJ, MESTRA, SENHA, fazer_pfx
 from test_emissor import SefinFalsa, ok
+from test_nfe import CADASTRO, PEDIDO, SefazFalsa, aut
 from test_servidor import _subir
 
 import conta_web
 import contas
 import emissor
+import emissor_nfe
 import planos
 import servidor
 
 ENV = {"NOTA_CHAVE_MESTRA": base64.b64encode(MESTRA).decode()}
-LISTA = planos.carregar()
-LISTA[2] = LISTA[2] | {"link_pagar": "lnk_pro"}  # Profissional: 3 empresas
+# A mecânica de planos (assinatura no Pagar, teto de empresas) se testa numa tabela de exemplo: a real hoje é só o grátis.
+LISTA = [
+    {"id": "gratis", "nome": "Grátis", "preco_mes": 0, "notas_mes": None, "empresas": 1, "teste_dias": 0, "destaques": [], "link_pagar": ""},
+    {"id": "pro", "nome": "Pro", "preco_mes": 29.9, "notas_mes": None, "empresas": None, "teste_dias": 0, "destaques": [],
+     "link_pagar": "lnk_pro"},
+]
 
 
 @pytest.fixture()
@@ -36,7 +42,9 @@ def app(tmp_path, monkeypatch):
     c = contas.Contas(tmp_path / "n.db", b"s" * 32)
     conta = conta_web.Conta(c, base="https://teste", env=ENV,
                             planos=planos.Planos(LISTA, consultar=lambda email: assinaturas.get(email, [])),
-                            emissor=emissor.Emissor(c, producao=False, fabrica_sefin=SefinFalsa))
+                            emissor=emissor.Emissor(c, producao=False, fabrica_sefin=SefinFalsa,
+                                                           classificar=lambda nbs, data, escolha: {"cst": "000", "cclass_trib": "000001", "cind_op": "100301"}),
+                            emissor_nfe=emissor_nfe.EmissorNfe(c, producao=False, fabrica_sefaz=SefazFalsa))
     monkeypatch.setattr(servidor, "CONTA", conta)
     monkeypatch.setattr(servidor, "TETO", servidor.Teto(1000))
     srv = _subir(servidor.Porta)
@@ -125,17 +133,22 @@ def test_retorno_do_google_com_estado_trocado_e_recusado(app):
 
 def test_planos_publicos_sem_login_e_sem_link_nao_mostram_checkout(app):
     st, corpo, _ = _req(app["url"] + "/conta/planos")
-    esperado = ["", f"{planos.PAGAR}/p/2bykhvut", f"{planos.PAGAR}/p/lnk_pro", f"{planos.PAGAR}/p/pxhgtuvj", f"{planos.PAGAR}/p/8ya9zfcp"]
+    esperado = ["", f"{planos.PAGAR}/p/lnk_pro"]
     assert st == 200 and [p["checkout"] for p in corpo["planos"]] == esperado
     assert corpo["sob_medida"]["whatsapp"].isdigit() and "@" in corpo["sob_medida"]["email"]
 
 
-def test_dois_planos_com_a_mesma_cota_de_notas_a_conta_fica_com_o_mais_caro():
-    # Essencial e Profissional têm 300 notas; escolher pela cota daria ao assinante do Profissional só 1 empresa.
-    lista = planos.carregar()
-    links = [{"link": p["link_pagar"], "acesso": True} for p in lista if p["id"] in ("essencial", "profissional")]
-    p = planos.Planos(lista, consultar=lambda e: links).do_email("x@y.com")
-    assert p["id"] == "profissional" and p["empresas"] == 3
+def test_plano_gratis_emite_sem_teto_de_notas_e_escritorio_cadastra_sem_teto_de_empresas(app):
+    # "Quebra o mercado" (Thiago, 20/11): grátis ilimitado em notas para 1 CNPJ; só o número de CNPJs é cobrado.
+    _, emp = _api(app, "POST", "/conta/empresas", {"cnpj": CNPJ, "razao": "A", "municipio_ibge": 4205407})
+    for _ in range(50):
+        app["c"].consumir_nota(emp["id"], None)
+    assert app["c"].empresa(app["u"]["id"], emp["id"])["notas_no_mes"] == 50
+    app["assinaturas"]["ana@exemplo.com"] = [{"link": "lnk_pro", "acesso": True, "status": "active"}]
+    _api(app, "POST", "/conta/plano/atualizar")
+    for i, cnpj in enumerate(("11222333000181", "45997418000153", "19131243000197")):
+        st, _ = _api(app, "POST", "/conta/empresas", {"cnpj": cnpj, "razao": f"E{i}", "municipio_ibge": 4205407})
+        assert st == 201
 
 
 def test_plano_sem_carencia_nao_promete_teste_gratis():
@@ -151,6 +164,18 @@ def test_todo_plano_pago_publicado_tem_link_do_pagar_e_o_gratis_nao_cobra():
             assert p["link_pagar"].isalnum() and len(p["link_pagar"]) == 8, p["id"]
         else:
             assert p["link_pagar"] == "", p["id"]
+
+
+def test_tabela_publicada_e_gratis_sem_teto_de_notas_nem_de_empresas():
+    # Ordem do Thiago (20/11): "faz ilimitado mesmo"; "tudo grátis por enquanto". Mudar isso é decisão dele, não acidente.
+    gratis = planos.carregar()[0]
+    assert (gratis["preco_mes"], gratis["notas_mes"], gratis["empresas"]) == (0, None, None)
+
+
+def test_dois_planos_com_assinatura_ativa_a_conta_fica_com_o_mais_caro():
+    lista = LISTA + [LISTA[1] | {"id": "barato", "preco_mes": 9.9, "empresas": 3, "link_pagar": "lnk_bar"}]
+    links = [{"link": "lnk_pro", "acesso": True}, {"link": "lnk_bar", "acesso": True}]
+    assert planos.Planos(lista, consultar=lambda e: links).do_email("x@y.com")["id"] == "pro"
 
 
 def test_sem_banco_configurado_a_conta_responde_503_e_a_calculadora_segue(monkeypatch):
@@ -238,3 +263,77 @@ def test_nota_listada_traz_o_servico_para_repetir_no_mes_seguinte(app):
     s = lista["notas"][0]["servico"]
     assert (s["codigo_servico"], s["nbs"], s["competencia"], s["tomador"]["nome"]) == ("171001", "115021000", "2026-10-31", "Prefeitura")
     assert "<dCompet>2026-10-31</dCompet>" in SefinFalsa.enviadas[0] and "<cNBS>115021000</cNBS>" in SefinFalsa.enviadas[0]
+
+
+def test_nfe_pela_porta_http_cadastro_por_put_emissao_e_xml_com_o_nome_da_chave(app):
+    SefazFalsa.roteiro, SefazFalsa.enviadas, SefazFalsa.consultas, SefazFalsa.autorizadas = [aut("9")], [], [], {}
+    _, emp = _api(app, "POST", "/conta/empresas", {"cnpj": CNPJ, "razao": "Loja", "municipio_ibge": 3304557})
+    _api(app, "POST", f"/conta/empresas/{emp['id']}/certificado",
+         {"pfx_base64": base64.b64encode(fazer_pfx()).decode(), "senha": SENHA})
+    st, cad = _api(app, "PUT", f"/conta/empresas/{emp['id']}/nfe/cadastro", CADASTRO)
+    assert st == 200 and cad["pronto"] and cad["uf"] == "RJ"
+    st, nota = _api(app, "POST", f"/conta/empresas/{emp['id']}/nfe", PEDIDO)
+    assert st == 201 and nota["status"] == "emitida"
+    r = urllib.request.Request(f"{app['url']}/conta/empresas/{emp['id']}/nfe/{nota['id']}/xml",
+                               headers={"Authorization": f"Bearer {app['chave']}"})
+    with urllib.request.urlopen(r, timeout=10) as resp:
+        corpo, cab = resp.read(), dict(resp.headers)
+    assert b"<nfeProc" in corpo and cab["Content-Disposition"] == f'attachment; filename="{nota["chave"]}-nfe.xml"'
+    _, lista = _api(app, "GET", f"/conta/empresas/{emp['id']}/nfe")
+    assert [n["id"] for n in lista["notas"]] == [nota["id"]]
+
+
+def test_suporte_publicado_cobra_100_por_mes_no_link_do_pagar_e_traz_o_whatsapp():
+    # Ordem do Thiago (21/11): suporte de R$ 100 com link de pagamento, atendido no WhatsApp dele.
+    sup = planos.por_id(planos.carregar())["suporte"]
+    assert (sup["preco_mes"], sup["link_pagar"], sup["teste_dias"]) == (100, "9vsw2gjw", 0)
+    assert sup["whatsapp"].isdigit() and sup["whatsapp"].startswith("55")
+    assert sup["notas_mes"] is None and sup["empresas"] is None  # o suporte não tira nada do grátis
+
+
+def test_botao_do_plano_pago_na_pagina_leva_ao_checkout_e_o_painel_mostra_o_whatsapp_de_quem_assinou():
+    landing = (AQUI / "web" / "landing.js").read_text(encoding="utf-8")
+    assert "p.preco_mes && p.checkout ? p.checkout" in landing
+    assert "p.whatsapp" in (AQUI / "web" / "painel.js").read_text(encoding="utf-8")
+
+
+def test_mcp_conferir_nfse_aceita_pedido_incompleto_e_lista_o_que_falta(app):
+    _, emp = _api(app, "POST", "/conta/empresas", {"cnpj": CNPJ, "razao": "Empresa", "municipio_ibge": 4205407})
+    r = _mcp(app, "conferir_nfse", {"empresa_id": emp["id"], "descricao": "Site"})["structuredContent"]
+    assert r["pronto"] is False
+    assert {"certificado", "codigo_servico", "valor"} <= {f["campo"] for f in r["faltando"]}
+    assert SefinFalsa.enviadas == []
+
+
+def test_patch_da_empresa_muda_im_e_regime_especial_e_recusa_valor_fora_do_leiaute_com_422(app):
+    _, emp = _api(app, "POST", "/conta/empresas", {"cnpj": CNPJ, "razao": "Empresa", "municipio_ibge": 4205407})
+    st, e = _api(app, "PATCH", f"/conta/empresas/{emp['id']}",
+                 {"inscricao_municipal": "123.456", "regime_especial": "6", "cnpj": "11222333000181"})
+    assert st == 200 and (e["inscricao_municipal"], e["regime_especial"], e["cnpj"]) == ("123456", "6", CNPJ)
+    st, r = _api(app, "PATCH", f"/conta/empresas/{emp['id']}", {"inscricao_municipal": "1" * 16})
+    assert st == 422 and r["erro"]["codigo"] == "inscricao_municipal_invalida"
+    st, r = _api(app, "PATCH", f"/conta/empresas/{emp['id']}", {"regime_especial": "7"})
+    assert st == 422 and r["erro"]["codigo"] == "regime_especial_invalido"
+    _, eu = _api(app, "GET", "/conta/eu")
+    assert eu["empresas"][0]["regime_especial"] == "6"
+
+
+def test_patch_de_empresa_de_outra_conta_e_404_e_nao_muda_nada(app):
+    c = app["c"]
+    outro = c.entrar_google({"sub": "g2", "email": "beto@exemplo.com", "verificado": True})
+    alheia = c.cadastrar_empresa(outro["id"], "11222333000181", "Do Beto", 4205407)
+    st, r = _api(app, "PATCH", f"/conta/empresas/{alheia['id']}", {"inscricao_municipal": "999"})
+    assert st == 404 and r["erro"]["codigo"] == "empresa_nao_encontrada"
+    assert c.empresa(outro["id"], alheia["id"])["inscricao_municipal"] == ""
+
+
+def test_mcp_editar_empresa_grava_im_e_regime_especial_pela_chave(app):
+    _, emp = _api(app, "POST", "/conta/empresas", {"cnpj": CNPJ, "razao": "Empresa", "municipio_ibge": 4205407})
+    st, r, _ = _req(app["url"] + "/mcp", "POST",
+                    {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                     "params": {"name": "editar_empresa", "arguments": {"empresa_id": emp["id"], "inscricao_municipal": "4321",
+                                                                        "regime_especial": "5"}}},
+                    {"Authorization": f"Bearer {app['chave']}"})
+    assert st == 200 and "isError" not in r["result"]
+    e = app["c"].empresa(app["u"]["id"], emp["id"])
+    assert (e["inscricao_municipal"], e["regime_especial"]) == ("4321", "5")

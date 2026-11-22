@@ -13,6 +13,7 @@ import datetime as dt
 import hashlib
 import hmac
 import json
+import re
 import secrets
 import sqlite3
 import threading
@@ -30,7 +31,7 @@ create table if not exists usuarios (
 create table if not exists empresas (
   id text primary key, usuario_id text not null references usuarios(id), cnpj text unique not null,
   razao text not null, municipio_ibge integer not null, regime text not null default 'simples',
-  criado text not null);
+  criado text not null, inscricao_municipal text not null default '', regime_especial text not null default '0');
 create table if not exists certificados (
   empresa_id text primary key references empresas(id) on delete cascade,
   chave_embrulhada blob not null, pfx_cifrado blob not null, senha_cifrada blob not null,
@@ -42,6 +43,14 @@ create table if not exists uso (
   empresa_id text not null references empresas(id) on delete cascade, mes text not null, notas integer not null default 0,
   primary key (empresa_id, mes));
 """
+# Colunas que nasceram depois do banco de produção: `create table if not exists` não as acrescenta num banco que já
+# existe, então cada uma entra por `alter table` na abertura, só se faltar (idempotente, sem perder linha).
+COLUNAS_NOVAS = {"empresas": [("inscricao_municipal", "text not null default ''"),
+                              ("regime_especial", "text not null default '0'")]}
+# TSRegEspTrib do XSD 1.01 da NFS-e nacional (nfelib 3.3.0, nfse/schemas/v1_0/tiposSimples_v1.01.xsd).
+REGIMES_ESPECIAIS = {"0": "Nenhum", "1": "Ato Cooperado (Cooperativa)", "2": "Estimativa", "3": "Microempresa Municipal",
+                     "4": "Notário ou Registrador", "5": "Profissional Autônomo", "6": "Sociedade de Profissionais",
+                     "9": "Outros"}
 SESSAO_SEGUNDOS = 14 * 24 * 3600
 
 
@@ -60,6 +69,22 @@ def mes_atual() -> str:
     return dt.datetime.now(ZoneInfo("America/Sao_Paulo")).strftime("%Y-%m")
 
 
+def _inscricao_municipal(valor: object) -> str:
+    """IM do prestador (TSInscMun: 1 a 15 caracteres). Pontuação de máscara sai; o resto tem de ser letra ou dígito."""
+    im = re.sub(r"[.\-/\s]", "", str(valor or ""))
+    if im and not re.fullmatch(r"[A-Za-z0-9]{1,15}", im):
+        raise Erro(422, "inscricao_municipal_invalida", "inscrição municipal tem de 1 a 15 letras ou dígitos")
+    return im
+
+
+def _regime_especial(valor: object) -> str:
+    v = str(valor if valor is not None else "0").strip() or "0"
+    if v not in REGIMES_ESPECIAIS:
+        raise Erro(422, "regime_especial_invalido",
+                   "regime especial é " + ", ".join(f"{k} ({n})" for k, n in REGIMES_ESPECIAIS.items()))
+    return v
+
+
 def _id(prefixo: str) -> str:
     return f"{prefixo}_{secrets.token_urlsafe(12)}"
 
@@ -75,6 +100,14 @@ class Contas:
         self.bd.execute("pragma foreign_keys = on")
         self.bd.execute("pragma journal_mode = wal")
         self.bd.executescript(ESQUEMA)
+        self._migrar()
+
+    def _migrar(self) -> None:
+        for tabela, colunas in COLUNAS_NOVAS.items():
+            tem = {r["name"] for r in self.bd.execute(f"pragma table_info({tabela})")}
+            for nome, tipo in colunas:
+                if nome not in tem:
+                    self.bd.execute(f"alter table {tabela} add column {nome} {tipo}")
 
     # ------------------------------------------------------------------ sessão
 
@@ -140,7 +173,8 @@ class Contas:
 
     # ---------------------------------------------------------------- empresas
 
-    def cadastrar_empresa(self, usuario_id: str, cnpj: str, razao: str, municipio_ibge: int, regime: str = "simples") -> dict:
+    def cadastrar_empresa(self, usuario_id: str, cnpj: str, razao: str, municipio_ibge: int, regime: str = "simples",
+                          inscricao_municipal: str = "", regime_especial: str = "0") -> dict:
         cnpj = certificado.so_digitos(cnpj)
         if len(cnpj) != 14:
             raise Erro(422, "cnpj_invalido", "CNPJ precisa ter 14 dígitos")
@@ -150,6 +184,7 @@ class Contas:
             raise Erro(422, "municipio_invalido", "código IBGE do município tem 7 dígitos")
         if regime not in ("simples", "mei", "normal"):
             raise Erro(422, "regime_invalido", "regime é simples, mei ou normal")
+        im, esp = _inscricao_municipal(inscricao_municipal), _regime_especial(regime_especial)
         with self.trava:
             dono = self.bd.execute("select usuario_id from empresas where cnpj = ?", (cnpj,)).fetchone()
             if dono and dono["usuario_id"] != usuario_id:
@@ -157,9 +192,24 @@ class Contas:
             if dono:
                 raise Erro(409, "cnpj_ja_cadastrado", "esse CNPJ já está na sua conta")
             eid = _id("emp")
-            self.bd.execute("insert into empresas values (?, ?, ?, ?, ?, ?, ?)",
-                            (eid, usuario_id, cnpj, razao.strip(), int(municipio_ibge), regime, _agora()))
+            self.bd.execute("insert into empresas (id, usuario_id, cnpj, razao, municipio_ibge, regime, criado, "
+                            "inscricao_municipal, regime_especial) values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            (eid, usuario_id, cnpj, razao.strip(), int(municipio_ibge), regime, _agora(), im, esp))
         return self.empresa(usuario_id, eid)
+
+    def editar_empresa(self, usuario_id: str, empresa_id: str, dados: dict) -> dict:
+        """Só os campos da lista mudam; CNPJ, município e regime do Simples ficam como cadastrados."""
+        self.empresa(usuario_id, empresa_id)
+        novos = {}
+        if "inscricao_municipal" in dados:
+            novos["inscricao_municipal"] = _inscricao_municipal(dados["inscricao_municipal"])
+        if "regime_especial" in dados:
+            novos["regime_especial"] = _regime_especial(dados["regime_especial"])
+        if novos:
+            with self.trava:
+                self.bd.execute(f"update empresas set {', '.join(k + ' = ?' for k in novos)} where id = ? and usuario_id = ?",
+                                (*novos.values(), empresa_id, usuario_id))
+        return self.empresa(usuario_id, empresa_id)
 
     def empresas(self, usuario_id: str) -> list[dict]:
         linhas = self.bd.execute("select id from empresas where usuario_id = ? order by criado", (usuario_id,)).fetchall()
@@ -174,6 +224,7 @@ class Contas:
         mes = mes_atual()
         u = self.bd.execute("select notas from uso where empresa_id = ? and mes = ?", (empresa_id, mes)).fetchone()
         return {"id": e["id"], "cnpj": e["cnpj"], "razao": e["razao"], "municipio_ibge": e["municipio_ibge"], "regime": e["regime"],
+                "inscricao_municipal": e["inscricao_municipal"], "regime_especial": e["regime_especial"],
                 "certificado": dict(c) if c else None, "notas_no_mes": u["notas"] if u else 0}
 
     # ------------------------------------------------------------ certificado
@@ -206,11 +257,14 @@ class Contas:
 
     # -------------------------------------------------------------------- uso
 
-    def consumir_nota(self, empresa_id: str, limite: int, mes: str | None = None) -> int:
+    def consumir_nota(self, empresa_id: str, limite: int | None, mes: str | None = None) -> int:
         """Reserva uma nota da cota do mês de forma atômica; acima do limite recusa sem gastar."""
         mes = mes or mes_atual()
         with self.trava:
             self.bd.execute("insert or ignore into uso values (?, ?, 0)", (empresa_id, mes))
+            if limite is None:  # plano sem teto de notas (null no planos.json): só conta o uso
+                self.bd.execute("update uso set notas = notas + 1 where empresa_id = ? and mes = ?", (empresa_id, mes))
+                return self.bd.execute("select notas from uso where empresa_id = ? and mes = ?", (empresa_id, mes)).fetchone()["notas"]
             cur = self.bd.execute("update uso set notas = notas + 1 where empresa_id = ? and mes = ? and notas < ?",
                                   (empresa_id, mes, limite))
             if cur.rowcount != 1:

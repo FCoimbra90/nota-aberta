@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uso da Nota Aberta</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="stylesheet" href="operacao.css">
+<link rel="icon" href="icone.svg" type="image/svg+xml">
+</head>
+<body>
+<header class="topo">
+  <div class="caixa">
+    <div><p class="rotulo">Nota Aberta · operação</p><h1>Uso ao vivo</h1></div>
+    <div class="acoes">
+      <button id="pausa" type="button" aria-pressed="false"><span class="pulso" aria-hidden="true"></span><span id="pausa-t">Ao vivo · pausar</span></button>
+      <a href="/">Site</a><a href="/painel.html">Emitir</a>
+    </div>
+  </div>
+</header>
+<main class="caixa">
+  <p id="ago" class="sub" aria-live="polite">Carregando…</p>
+  <section class="kpis" id="kpis" aria-label="Números de hoje"></section>
+
+  <section class="card" aria-labelledby="t-tl">
+    <div class="ch"><div><h2 id="t-tl">Requisições</h2><p class="sub" id="tl-sub">por minuto, última hora</p></div>
+      <div class="tabs" role="tablist" aria-label="Período do gráfico" id="tabs-tl">
+        <button role="tab" aria-selected="true" data-r="m60">60 min</button>
+        <button role="tab" aria-selected="false" tabindex="-1" data-r="h24">24 h</button>
+        <button role="tab" aria-selected="false" tabindex="-1" data-r="d7">7 dias</button>
+      </div></div>
+    <div class="chart" id="chart"></div>
+    <p class="leg"><i class="l-total"></i> todos os pedidos <i class="l-pessoa"></i> pessoas</p>
+  </section>
+
+  <section class="card" aria-labelledby="t-ng">
+    <div class="ch"><div><h2 id="t-ng">Contas e notas</h2><p class="sub">do banco, só contagens; produção é nota com valor fiscal</p></div></div>
+    <div id="negocio" class="mini"></div>
+  </section>
+
+  <section class="card" aria-labelledby="t-fu">
+    <div class="ch"><div><h2 id="t-fu">Funil</h2><p class="sub">de quem cria conta até a primeira nota com valor fiscal (contas únicas)</p></div></div>
+    <ol class="funil" id="funil"></ol>
+  </section>
+
+  <section class="card" aria-labelledby="t-em">
+    <div class="ch"><div><h2 id="t-em">Empresas</h2><p class="sub">quem está usando, em que etapa e o último erro de cada uma</p></div></div>
+    <div class="rolar" id="empresas"></div>
+  </section>
+
+  <div class="grid2">
+    <section class="card" aria-labelledby="t-cn"><div class="ch"><div><h2 id="t-cn">Canais hoje</h2><p class="sub">onde os pedidos entram</p></div></div><ul class="bars" id="canais"></ul></section>
+    <section class="card" aria-labelledby="t-ua"><div class="ch"><div><h2 id="t-ua">Quem usa hoje</h2><p class="sub">pessoas, agentes de IA e robôs</p></div></div><ul class="bars" id="uas"></ul><p class="sub" id="st"></p></section>
+  </div>
+  <div class="grid2">
+    <section class="card" aria-labelledby="t-or"><div class="ch"><div><h2 id="t-or">De onde vêm as pessoas</h2><p class="sub">site que mandou a visita hoje (t.co é o X)</p></div></div><div id="origem"></div></section>
+    <section class="card" aria-labelledby="t-pg"><div class="ch"><div><h2 id="t-pg">Páginas abertas hoje</h2><p class="sub">e países de quem abriu</p></div></div><div id="paginas"></div><div id="paises"></div></section>
+  </div>
+  <section class="card" aria-labelledby="t-mc"><div class="ch"><div><h2 id="t-mc">Ferramentas MCP hoje</h2><p class="sub">chamadas de agentes de IA</p></div></div><div id="tools"></div></section>
+  <p class="sub rodape">Sem dado pessoal: nenhum IP, e-mail ou CNPJ é guardado nem mostrado; a lista de empresas traz só razão social, cidade e regime. Visitante único é um hash do dia que não volta a ser IP. Rankings só mostram o que apareceu 2 vezes ou mais.</p>
+</main>
+<script src="operacao.js"></script>
+</body>
+</html>

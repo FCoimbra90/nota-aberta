@@ -77,7 +77,11 @@ Aponte o seu cliente MCP para `https://<seu-host>/mcp` (Streamable HTTP, só POS
 | `aliquotas_referencia` | alíquotas de referência da CBS, do IBS estadual e do municipal |
 | `versao_motor` | versão do motor e da base de tabelas que está respondendo |
 
-Com `Authorization: Bearer na_...` (chave criada no painel): `listar_empresas`, `emitir_nfse`, `cancelar_nfse` e `listar_notas`.
+| `classificar_nbs` | para um NBS, a classificação de IBS/CBS (CST, cClassTrib) e o indicador de operação aceitos na NFS-e |
+
+Com `Authorization: Bearer na_...` (chave criada no painel): `listar_empresas`, `conferir_nfse` (antes de emitir: tudo o que falta de uma vez, sem cota e sem governo), `emitir_nfse` (com NBS a nota sai com o grupo
+IBS/CBS; `retencoes` para ISS retido, IRRF, CSLL, INSS, PIS e Cofins; `aliquota_simples` para o % do Simples da ME/EPP), `cancelar_nfse`, `listar_notas` e, para NF-e de produto,
+`cadastro_nfe`, `emitir_nfe` e `listar_nfe`.
 
 ## Como funciona
 
@@ -106,7 +110,13 @@ seria uma segunda cópia da regra fiscal, e ela divergiria da oficial na primeir
 - [x] Emissor de NFS-e nacional: contas com Google, certificado cifrado, cota, painel, API e MCP
 - [x] Primeira nota aceita pela Sefin: produção restrita em 18/11 e **produção (valor fiscal) em 19/11**, com cancelamento
 - [ ] Simples Nacional (motor 0.0.6 da Receita: já compila e sobe com a mesma base)
+- [x] **NF-e de produto (modelo 55) para qualquer empresa do Simples e MEI**, nas 27 UFs, com DANFE (20/11; homologação provada na SVRS)
+- [ ] NF-e: cancelamento, carta de correção, inutilização e regime normal
+- [x] **IBS/CBS da Reforma na NFS-e**: classificação pelo NBS no motor oficial, CBS e IBS calculados pela Sefin na nota (20/11)
+- [x] Retenções na fonte para Lucro Real/Presumido e órgão público: ISS retido, IRRF, CSLL, INSS, PIS e Cofins (20/11)
 - [x] Cancelar nota pela tela, pela API e pelo MCP (`cancelar_nfse`; evento 101101 aceito pela Sefin em 18/11)
+- [x] Inscrição municipal do prestador e regime especial de tributação do ISS (`regEspTrib`, ex.: sociedade de profissionais) por empresa, no painel, na API (`PATCH /conta/empresas/<id>`) e no MCP (`editar_empresa`) (21/11)
+- [x] Documentação da API e do MCP gerada do código em `/docs` e `/llms.txt` (21/11)
 - [ ] Substituir nota (cancelar e reemitir numa operação só)
 - [ ] Conferência em lote: suba as notas do seu sistema e veja onde o cálculo diverge do oficial
 

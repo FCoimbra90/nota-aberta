@@ -1,7 +1,7 @@
 :root {
-  --fundo: #f6f7f4; --cartao: #ffffff; --texto: #1c2321; --suave: #5b6662; --borda: #dde2de;
+  --fundo: #f7f6f3; --cartao: #ffffff; --texto: #121816; --suave: #5d6763; --borda: #e6e3dd;
   --marca: #0f6b4f; --marca-texto: #ffffff; --marca-claro: #e3f1eb; --erro: #a4262c; --erro-fundo: #fbeceb;
-  --aviso: #8a5a00; --aviso-fundo: #fdf3dc; --raio: 12px;
+  --aviso: #8a5a00; --aviso-fundo: #fdf3dc; --raio: 18px;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
@@ -45,6 +45,34 @@ button { font: inherit; cursor: pointer; border-radius: 8px; padding: 10px 18px;
 button.secundario { background: transparent; color: var(--marca); }
 button:disabled { opacity: .6; cursor: progress; }
 .remover { margin-top: 10px; padding: 6px 12px; font-size: .85rem; }
+.rtc { border: 1px solid var(--borda); border-left: 4px solid var(--marca); border-radius: 10px; padding: 12px 14px; }
+.rtc p { margin: 0 0 6px; }
+.rtc-titulo { font-size: .9rem; }
+.rtc-previa { font-variant-numeric: tabular-nums; }
+.opcao-linha { flex-direction: row; align-items: center; gap: 8px; font-size: .9rem; cursor: pointer; align-self: end; padding-bottom: 10px; }
+.opcao-linha input { width: auto; flex: none; margin: 0; padding: 0; min-height: 0; accent-color: var(--marca); }
+.rtc .opcao-linha { padding-bottom: 0; }
+/* `label { display: flex }` venceria o atributo hidden (o seletor de classificação aparecia vazio). */
+[hidden] { display: none !important; }
+.tributos { display: block; color: var(--suave); font-size: .8rem; margin-top: 2px; font-variant-numeric: tabular-nums; }
+.itens-nfe { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: .9rem; }
+/* Larguras fixas: com a tabela automática o CSOSN ficava cortado ("10:") ao lado da descrição. */
+@media (min-width: 721px) {
+  .itens-nfe { table-layout: fixed; }
+  .itens-nfe th:nth-child(1) { width: 13%; } .itens-nfe th:nth-child(3) { width: 13%; }
+  .itens-nfe th:nth-child(4) { width: 8%; } .itens-nfe th:nth-child(5) { width: 14%; }
+  .itens-nfe th:nth-child(6) { width: 84px; } .itens-nfe th:nth-child(7) { width: 40px; }
+}
+.itens-nfe th { text-align: left; font-weight: 600; color: var(--suave); padding: 4px; }
+.itens-nfe td { padding: 3px; vertical-align: top; }
+.itens-nfe input, .itens-nfe select { width: 100%; min-width: 0; }
+.nfe-total { font-weight: 600; font-variant-numeric: tabular-nums; margin: 0; }
+#nfe > label { max-width: 420px; margin-bottom: 12px; }
+@media (max-width: 720px) {
+  .itens-nfe thead { display: none; }
+  .itens-nfe tr { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; border-bottom: 1px solid var(--borda); padding: 6px 0; }
+  .itens-nfe td:nth-child(2) { grid-column: span 2; order: -1; }
+}
 .acoes { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 24px; }
 .totais { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
 .totais div { background: var(--marca-claro); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; }
@@ -123,3 +151,43 @@ a.botao.secundario { background: transparent; color: var(--marca); }
 @media (max-width: 720px) {
   .tres, .duas, .planos { grid-template-columns: 1fr; }
 }
+
+
+/* ---- Visual de 20/11/2026: o mesmo da página oficial (landing.css). Branco, raio grande, botão em pílula escura,
+   sombra leve no lugar de borda. Fica no fim para valer sobre as regras antigas sem reescrever as telas. */
+body { font-size: 16px; -webkit-font-smoothing: antialiased; }
+h2 { font-size: 1.35rem; letter-spacing: -.02em; margin-bottom: 16px; }
+.cartao { border: 0; box-shadow: 0 1px 2px rgba(16, 24, 22, .05), 0 8px 24px rgba(16, 24, 22, .06); padding: clamp(20px, 3vw, 32px); margin-bottom: 24px; }
+.barra { position: sticky; top: 0; z-index: 10; margin-bottom: 28px; background: color-mix(in srgb, var(--cartao) 86%, transparent);
+  backdrop-filter: saturate(1.4) blur(14px); -webkit-backdrop-filter: saturate(1.4) blur(14px); }
+.barra .nav { padding: 16px 0; }
+.marca { display: inline-flex; align-items: center; gap: 10px; font-weight: 750; letter-spacing: -.01em; }
+.marca::before { content: ""; width: 20px; height: 20px; border-radius: 6px; background: linear-gradient(135deg, #17a073, #0f6b4f); }
+.nav-links a { color: var(--suave); text-decoration: none; }
+.nav-links a:hover { color: var(--texto); }
+input, select { border-radius: 10px; padding: 11px 12px; transition: border-color .15s ease, box-shadow .15s ease; }
+input:focus, select:focus { outline: none; border-color: var(--marca); box-shadow: 0 0 0 3px color-mix(in srgb, var(--marca) 18%, transparent); }
+button, .botao, a.botao { border-radius: 999px; padding: 11px 20px; font-weight: 600; background: var(--texto); color: var(--cartao);
+  border: 1px solid var(--texto); transition: transform .15s ease, box-shadow .15s ease; }
+button:hover:not(:disabled), .botao:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(16, 24, 22, .14); }
+button.secundario { background: transparent; color: var(--texto); border-color: var(--borda); }
+button.secundario:hover:not(:disabled) { border-color: var(--texto); box-shadow: none; }
+button.mini { padding: 4px 12px; }
+.botao-fiscal { background: var(--erro); border-color: var(--erro); color: #fff; }
+.faixa { border-radius: 14px; padding: 14px 18px; font-weight: 550; }
+details > summary { cursor: pointer; font-weight: 600; color: var(--marca); }
+table th { color: var(--suave); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; }
+th, td { padding: 12px 8px; }
+.etiqueta { border-radius: 999px; padding: 1px 9px; }
+.rtc, .ambiente-escolha { border-radius: 14px; }
+/* Cabeçalho da calculadora: tinta escura no lugar do verde chapado, com o verde só no rótulo. */
+.topo { background: var(--texto); color: var(--cartao); padding: clamp(40px, 7vh, 72px) 0 clamp(32px, 5vh, 56px); }
+.topo .selo { color: #5fd6a2; opacity: 1; letter-spacing: .14em; font-weight: 600; }
+.topo h1 { letter-spacing: -.03em; font-size: clamp(2rem, 5vw, 3.2rem); }
+/* Erro da nota explicado (21/11): o que aconteceu, o que fazer e, pequeno, o código para o suporte. */
+.erro-nota { margin-top: 8px; display: grid; gap: 6px; }
+.erro-nota p { margin: 0; padding: 10px 12px; border-left: 3px solid var(--erro); border-radius: 6px;
+  background: var(--erro-fundo); }
+.erro-nota strong { display: block; font-weight: 600; }
+.erro-nota span { display: block; margin-top: 4px; font-size: .9rem; }
+.erro-nota small { display: block; margin-top: 4px; opacity: .7; font-size: .78rem; }

@@ -165,3 +165,43 @@ def test_cota_do_mes_para_no_limite_e_devolve_nota_recusada(c):
     assert err.value.status == 402
     c.devolver_nota(e["id"], mes="2027-01")
     assert c.consumir_nota(e["id"], 2, mes="2027-01") == 2
+
+
+def test_banco_antigo_sem_im_nem_regime_especial_ganha_as_colunas_sem_perder_a_empresa(tmp_path):
+    import sqlite3
+    caminho = tmp_path / "antigo.db"
+    bd = sqlite3.connect(str(caminho))
+    bd.executescript("""
+    create table usuarios (id text primary key, google_sub text unique not null, email text not null,
+      nome text not null default '', criado text not null);
+    create table empresas (id text primary key, usuario_id text not null references usuarios(id), cnpj text unique not null,
+      razao text not null, municipio_ibge integer not null, regime text not null default 'simples', criado text not null);
+    insert into usuarios values ('usu_1', 'g1', 'ana@exemplo.com', 'Ana', '2026-11-01');
+    insert into empresas values ('emp_1', 'usu_1', '12345678000195', 'Antiga', 4205407, 'simples', '2026-11-01');
+    """)
+    bd.commit()
+    bd.close()
+    c = contas.Contas(caminho, b"s" * 32)
+    e = c.empresa("usu_1", "emp_1")
+    assert (e["razao"], e["inscricao_municipal"], e["regime_especial"]) == ("Antiga", "", "0")
+    contas.Contas(caminho, b"s" * 32)  # abrir de novo não tenta acrescentar a coluna outra vez
+    assert c.editar_empresa("usu_1", "emp_1", {"inscricao_municipal": "12.345-6", "regime_especial": "6"})["inscricao_municipal"] == "123456"
+
+
+def test_inscricao_municipal_com_mais_de_15_caracteres_ou_simbolo_e_422(c):
+    u, e = _conta_com_empresa(c)
+    for ruim in ("1" * 16, "12#34"):
+        with pytest.raises(contas.Erro) as err:
+            c.editar_empresa(u["id"], e["id"], {"inscricao_municipal": ruim})
+        assert err.value.status == 422
+    assert c.empresa(u["id"], e["id"])["inscricao_municipal"] == ""
+
+
+def test_regime_especial_fora_do_dominio_do_leiaute_e_422_no_cadastro_e_na_edicao(c):
+    u, e = _conta_com_empresa(c)
+    with pytest.raises(contas.Erro) as err:
+        c.editar_empresa(u["id"], e["id"], {"regime_especial": "7"})
+    assert err.value.status == 422
+    with pytest.raises(contas.Erro) as err:
+        c.cadastrar_empresa(u["id"], "11222333000181", "Outra", 4205407, regime_especial="sociedade")
+    assert err.value.status == 422

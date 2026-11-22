@@ -15,6 +15,7 @@ Só biblioteca padrão: a imagem já carrega uma JVM, não precisa de mais nada.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -28,7 +29,16 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import docs as docs_mod
 import mcp
+import uso as uso_mod
+
+
+class ServidorFila(ThreadingHTTPServer):
+    # Fila de conexões à espera do accept: o padrão do socketserver é 5, e com 25 pessoas chegando juntas o kernel derruba
+    # o excedente e o cliente só tenta de novo em 1 s (p95 de 1,1 s medido em 21/11, apps/factory/bin/medir-carga.py).
+    request_queue_size = 128
+
 
 AQUI = Path(__file__).resolve().parent
 WEB = AQUI / "web"
@@ -45,12 +55,16 @@ PERMITIDAS = [
     ("POST", re.compile(r"^/calculadora/(observabilidade/)?regime-geral$")),
     ("POST", re.compile(r"^/calculadora/base-calculo/[A-Za-z0-9_\-]+$")),
     ("POST", re.compile(r"^/calculadora/nfse/[A-Za-z0-9/_\-]+$")),
+    # Consultas da NFS-e (classificação por NBS, indicador de operação, locais): dados abertos, só leitura.
+    ("GET", re.compile(r"^/calculadora/nfse/(situacoes-classificacoes-tributarias|indicador-operacao|local-operacao|"
+                       r"locais-fornecimento|locais-incidencia)$")),
     ("POST", re.compile(r"^/calculadora/xml/(generate|validate)$")),
     ("GET", re.compile(r"^/(swagger-ui\.html|swagger-ui/[A-Za-z0-9._\-/]+|api-docs(/[A-Za-z0-9._\-]+)?)$")),
 ]
 TIPOS = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
          ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".txt": "text/plain; charset=utf-8",
-         ".json": "application/json", ".ico": "image/x-icon", ".xml": "application/xml"}
+         ".json": "application/json", ".ico": "image/x-icon", ".webp": "image/webp", ".xml": "application/xml",
+         ".woff2": "font/woff2"}  # fontes da Genesis na página (21/11); como octet-stream + nosniff o Firefox recusa a fonte
 CABECALHOS_SEGURANCA = {
     "X-Content-Type-Options": "nosniff",
     "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -60,6 +74,89 @@ CABECALHOS_SEGURANCA = {
 # a CSP estrita vale só para a nossa página.
 CSP_PAGINA = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
               "connect-src 'self' https://viacep.com.br; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+
+
+_ASSET_LOCAL = re.compile(rb'(href|src)="([A-Za-z0-9_\-]+\.(?:css|js))"')
+
+
+def carimbar(html: bytes) -> bytes:
+    """Põe ?v=<hash do conteúdo> em cada CSS e JS local que a página pede.
+
+    A zona da Cloudflare reescreve o Cache-Control do CSS para max-age=14400 (Browser Cache TTL de 4 h, medido em
+    21/11): depois de uma publicação, o navegador do X ficou com o landing.css velho e a página nova saiu sem estilo.
+    Com o hash no endereço, arquivo novo é endereço novo e nenhum cache serve o antigo."""
+    def troca(m: re.Match) -> bytes:
+        arq = WEB / m.group(2).decode()
+        if not arq.is_file():
+            return m.group(0)
+        return m.group(1) + b'="' + m.group(2) + b"?v=" + versao(arq).encode() + b'"'
+    return _ASSET_LOCAL.sub(troca, html)
+
+
+_VERSOES: dict[tuple[str, float], str] = {}
+
+
+def versao(arq: Path) -> str:
+    """Hash curto do conteúdo, lembrado por (arquivo, mtime): a página não relê e re-hasheia o CSS a cada visita."""
+    chave = (str(arq), arq.stat().st_mtime)
+    if chave not in _VERSOES:
+        _VERSOES[chave] = hashlib.sha256(arq.read_bytes()).hexdigest()[:10]
+    return _VERSOES[chave]
+
+
+# Cache em camadas (21/11, "pra escalar tem que cachear muita coisa"). Medido antes: HTML e API DYNAMIC na Cloudflare,
+# todo cálculo indo ao motor Java. Agora:
+#  - CSS/JS com ?v=<hash certo>: imutável por 1 ano (arquivo novo = endereço novo);
+#  - páginas: 1 min no navegador e 5 min na borda, servindo a velha por até 1 dia enquanto revalida;
+#  - dados abertos e consultas de NFS-e do motor (GET): 1 h no navegador, 1 dia na borda;
+#  - cálculos (POST): memória do processo por 1 h, porque o motor é determinístico para o mesmo corpo e a mesma versão.
+CACHE_IMUTAVEL = "public, max-age=31536000, immutable"
+CACHE_PAGINA = "public, max-age=60, s-maxage=300, stale-while-revalidate=86400"
+CACHE_API_GET = "public, max-age=3600, s-maxage=86400"
+CACHE_ARQUIVO = "public, max-age=3600"
+
+
+class MemoriaDeCalculo:
+    """Resposta do motor oficial por (rota, corpo), com prazo e teto em bytes. Só guarda 200."""
+
+    def __init__(self, segundos: int = 3600, teto_bytes: int = 32 * 1024 * 1024, relogio=time.monotonic):
+        self.segundos, self.teto, self.relogio = segundos, teto_bytes, relogio
+        self.itens: dict[str, tuple[float, bytes, str]] = {}
+        self.bytes = 0
+        self.trava = threading.Lock()
+
+    @staticmethod
+    def chave(api: str, corpo: bytes) -> str:
+        return api + "|" + hashlib.sha256(corpo).hexdigest()
+
+    def ler(self, chave: str) -> tuple[bytes, str] | None:
+        with self.trava:
+            item = self.itens.get(chave)
+            if item is None:
+                return None
+            if self.relogio() - item[0] > self.segundos:
+                self._tirar(chave)
+                return None
+            self.itens[chave] = self.itens.pop(chave)  # mais recente vai para o fim (LRU)
+            return item[1], item[2]
+
+    def guardar(self, chave: str, dados: bytes, tipo: str) -> None:
+        if len(dados) > self.teto // 8:
+            return
+        with self.trava:
+            if chave in self.itens:
+                self._tirar(chave)
+            self.itens[chave] = (self.relogio(), dados, tipo)
+            self.bytes += len(dados)
+            while self.bytes > self.teto:
+                self._tirar(next(iter(self.itens)))
+
+    def _tirar(self, chave: str) -> None:
+        _, dados, _ = self.itens.pop(chave)
+        self.bytes -= len(dados)
+
+
+MEMORIA = MemoriaDeCalculo()
 
 
 def permitida(metodo: str, caminho_api: str) -> bool:
@@ -91,6 +188,7 @@ class Teto:
 
 TETO = Teto(TETO_POR_MINUTO)
 CONTA = None  # conta_web.Conta quando o servidor tem banco e segredo (montar_conta); sem eles, só a calculadora
+USO = None  # uso.Uso quando há banco e segredo (montar_uso): o painel de uso em /operacao
 ROTAS_CONTA = ("/entrar/", "/sair", "/conta/")
 
 
@@ -103,6 +201,24 @@ def montar_conta(env: dict | None = None):
     import contas
     return conta_web.Conta(contas.Contas(env["NOTA_DB"], env["NOTA_SEGREDO_SESSAO"].encode()),
                            base=env.get("NOTA_BASE_URL", "https://reforma.genesisinnovation.io"), env=env)
+
+
+def montar_uso(env: dict | None = None):
+    """O painel de uso grava ao lado do banco das contas (`NOTA_USO_DB`, padrão `uso.db` na mesma pasta)."""
+    env = env if env is not None else os.environ
+    if not env.get("NOTA_DB") or len(env.get("NOTA_SEGREDO_SESSAO", "")) < 32:
+        return None
+    caminho = env.get("NOTA_USO_DB") or str(Path(env["NOTA_DB"]).with_name("uso.db"))
+    host = (env.get("NOTA_BASE_URL", "https://reforma.genesisinnovation.io").split("//")[-1]).split("/")[0]
+    return uso_mod.Uso(caminho, env["NOTA_SEGREDO_SESSAO"].encode(), host=host,
+                       negocio=uso_mod.negocio_do_banco(env["NOTA_DB"]))
+
+
+def ferramentas_mcp(corpo) -> list[str]:
+    """Nome das ferramentas chamadas num pedido MCP (um ou um lote); o resto do pedido não é guardado."""
+    pedidos = corpo if isinstance(corpo, list) else [corpo]
+    return [str(p["params"].get("name", "")) for p in pedidos if isinstance(p, dict) and p.get("method") == "tools/call"
+            and isinstance(p.get("params"), dict)]
 
 
 def chamar_motor(metodo: str, api: str, dados: bytes | None) -> tuple[int, object]:
@@ -141,6 +257,29 @@ class Porta(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # sem IP no log: não precisamos dele guardado
         sys.stderr.write(f"{self.command} {self.path.split('?')[0]}\n")
 
+    def send_response(self, code, message=None):
+        self._status = code
+        super().send_response(code, message)
+
+    def parse_request(self):
+        # O relógio da latência começa com o pedido lido, não antes: numa conexão keep-alive o
+        # handle_one_request fica parado esperando o PRÓXIMO pedido, e esse tempo ocioso virava
+        # "latência média" de 3 a 5 s no painel (medido em 21/11, com o servidor respondendo em ms).
+        self._inicio = time.monotonic()
+        return super().parse_request()
+
+    def handle_one_request(self):
+        # Cada pedido vira contador do painel de uso depois de respondido; falha do painel nunca derruba o pedido.
+        self._status, self._ferramentas, self._inicio = 0, None, None
+        super().handle_one_request()
+        if USO is None or not getattr(self, "command", None) or not self._status or self._inicio is None:
+            return
+        try:
+            USO.registrar(self.command, self.path.split("?")[0], self._status, (time.monotonic() - self._inicio) * 1000,
+                          {k.lower(): v for k, v in self.headers.items()}, self._ip(), self._ferramentas)
+        except Exception as e:  # noqa: BLE001 (contador é acessório; o erro vai ao log e o serviço segue)
+            sys.stderr.write(f"painel de uso: {type(e).__name__}\n")
+
     def _ip(self) -> str:
         return (self.headers.get("CF-Connecting-IP") or self.client_address[0] or "?").strip()
 
@@ -167,10 +306,18 @@ class Porta(BaseHTTPRequestHandler):
             ok = backend_vivo()
             return self._enviar(200 if ok else 503, b"ok" if ok else b"motor fora", "text/plain; charset=utf-8",
                                 {"Cache-Control": "no-store"})
+        if caminho in ("/api", "/api/", "/api/docs", "/doc", "/documentacao"):
+            return self._enviar(302, b"", "text/plain; charset=utf-8", {"Location": "/docs"})
+        if caminho in ("/docs", "/llms.txt"):
+            return self._docs(caminho)
+        if caminho == "/mcp":
+            return self._mcp_get()
         if caminho.startswith("/api/"):
             return self._repassar()
         if caminho.startswith(ROTAS_CONTA):
             return self._conta()
+        if caminho in ("/operacao", "/operacao/stats.json"):
+            return self._operacao(caminho)
         return self._estatico(caminho)
 
     def do_POST(self):
@@ -184,6 +331,16 @@ class Porta(BaseHTTPRequestHandler):
         self._json(405, {"erro": "método não permitido"})
 
     def do_DELETE(self):
+        if self.path.split("?")[0].startswith("/conta/"):
+            return self._conta()
+        self._json(405, {"erro": "método não permitido"})
+
+    def do_PATCH(self):  # editar a empresa (PATCH /conta/empresas/<id>: inscrição municipal e regime especial)
+        if self.path.split("?")[0].startswith("/conta/"):
+            return self._conta()
+        self._json(405, {"erro": "método não permitido"})
+
+    def do_PUT(self):  # cadastro da NF-e da empresa (PUT /conta/empresas/<id>/nfe/cadastro)
         if self.path.split("?")[0].startswith("/conta/"):
             return self._conta()
         self._json(405, {"erro": "método não permitido"})
@@ -211,6 +368,8 @@ class Porta(BaseHTTPRequestHandler):
         if r.bruto is not None:
             self.send_header("Content-Type", r.tipo)
             self.send_header("Content-Length", str(len(r.bruto)))
+            if getattr(r, "arquivo", "") and re.fullmatch(r"[A-Za-z0-9.-]{1,80}", r.arquivo):
+                self.send_header("Content-Disposition", f'attachment; filename="{r.arquivo}"')
             self.end_headers()
             self.wfile.write(r.bruto)
             return None
@@ -238,6 +397,7 @@ class Porta(BaseHTTPRequestHandler):
         except ValueError:
             return self._json(400, {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": "JSON inválido"}})
         ip = self._ip()
+        self._ferramentas = ferramentas_mcp(corpo)
 
         def chamar(metodo: str, api: str, dados: bytes | None):
             # O teto vale por chamada ao motor, não por requisição: um lote de MCP não dribla o limite por IP.
@@ -266,17 +426,66 @@ class Porta(BaseHTTPRequestHandler):
             return None
         return self._json(status, resp)
 
+    def _docs(self, caminho: str):
+        """Documentação gerada do código (docs.py): a mesma lista de ferramentas que o MCP expõe."""
+        base = os.environ.get("NOTA_BASE_URL", "https://reforma.genesisinnovation.io").rstrip("/")
+        if caminho == "/llms.txt":
+            return self._enviar(200, docs_mod.markdown(base).encode(), TIPOS[".txt"], {"Cache-Control": CACHE_PAGINA})
+        self._enviar(200, carimbar(docs_mod.pagina(base).encode()), TIPOS[".html"],
+                     {"Cache-Control": CACHE_PAGINA, "Content-Security-Policy": CSP_PAGINA})
+
+    def _mcp_get(self):
+        """GET /mcp. Cliente MCP que abre o fluxo SSE (Accept: text/event-stream) recebe 405, como manda a spec do
+        Streamable HTTP para servidor sem SSE. Navegador vai para a documentação (antes: 404 "não encontrado",
+        reclamação no X em 21/11). Outro cliente recebe um JSON dizendo como usar."""
+        aceita = self.headers.get("Accept", "")
+        if "text/event-stream" in aceita:
+            return self._enviar(405, b"", "text/plain; charset=utf-8", {"Allow": "POST"})
+        if "text/html" in aceita:
+            return self._enviar(302, b"", "text/plain; charset=utf-8", {"Location": "/docs#mcp"})
+        self._json(200, {"mcp": "Nota Aberta", "transporte": "Streamable HTTP: POST com JSON-RPC 2.0 neste endereço",
+                         "documentacao": "/docs#mcp", "texto_para_agentes": "/llms.txt"})
+
+    def _operacao(self, caminho: str):
+        """Painel de uso: só para quem entrou com Google e está em NOTA_PAINEL_EMAILS (segredo do pod)."""
+        if USO is None or CONTA is None:
+            return self._json(503, {"erro": "painel de uso desligado neste servidor"})
+        cab = {k.lower(): v for k, v in self.headers.items()}
+        u = CONTA.c.usuario_da_sessao(CONTA._cookies(cab).get("na_sessao", ""))
+        ok = bool(u) and uso_mod.autorizado(u.get("email", ""), os.environ.get("NOTA_PAINEL_EMAILS", ""))
+        if caminho.endswith(".json"):
+            return self._json(200, USO.estatisticas()) if ok else self._json(403, {"erro": "sem acesso ao painel"})
+        nome = "operacao.html" if ok else "operacao-entrar.html"
+        corpo = carimbar((WEB / nome).read_bytes())
+        self._enviar(200 if ok else 403, corpo, TIPOS[".html"], {"Content-Security-Policy": CSP_PAGINA,
+                                                                 "Cache-Control": "no-store"})
+
     def _estatico(self, caminho: str):
         nome = "index.html" if caminho in ("/", "") else caminho.lstrip("/")
-        if not re.fullmatch(r"[A-Za-z0-9_\-]+(\.[A-Za-z0-9]+)", nome):
+        # Só a raiz de web/ e a pasta img/ (fotos da página); nada de "..", barra dupla ou outra pasta.
+        # operacao*.html só sai pela rota /operacao, que confere o login.
+        if not re.fullmatch(r"(img/)?[A-Za-z0-9_\-]+(\.[A-Za-z0-9]+)", nome) or re.fullmatch(r"operacao.*\.html", nome):
             return self._json(404, {"erro": "não encontrado"})
         arq = WEB / nome
         if not arq.is_file():
             return self._json(404, {"erro": "não encontrado"})
-        extra = {"Cache-Control": "no-cache"}
+        # Foto não muda de conteúdo sem mudar de nome: cache longo. CSS/JS só é imutável quando o ?v= é o hash do
+        # conteúdo atual (endereço sem ou com hash velho revalida, senão um HTML antigo prenderia o arquivo errado).
+        v = (self.path.partition("?")[2].partition("v=")[2])[:10]
+        if nome.startswith("img/"):
+            cache = "public, max-age=604800"
+        elif arq.suffix in (".css", ".js"):
+            cache = CACHE_IMUTAVEL if v and v == versao(arq) else "no-cache"
+        elif arq.suffix == ".html":
+            cache = CACHE_PAGINA
+        else:
+            cache = CACHE_ARQUIVO
+        extra = {"Cache-Control": cache}
+        corpo = arq.read_bytes()
         if arq.suffix == ".html":
             extra["Content-Security-Policy"] = CSP_PAGINA
-        self._enviar(200, arq.read_bytes(), TIPOS.get(arq.suffix, "application/octet-stream"), extra)
+            corpo = carimbar(corpo)
+        self._enviar(200, corpo, TIPOS.get(arq.suffix, "application/octet-stream"), extra)
 
     def _repassar(self):
         caminho, _, consulta = self.path.partition("?")
@@ -294,6 +503,11 @@ class Porta(BaseHTTPRequestHandler):
             if n > CORPO_MAX:
                 return self._json(413, {"erro": f"corpo acima de {CORPO_MAX // 1024} KB"})
             corpo = self.rfile.read(n)
+            chave = MEMORIA.chave(api + "?" + consulta, corpo)
+            guardado = MEMORIA.ler(chave)
+            if guardado is not None:
+                return self._enviar(200, guardado[0], guardado[1], {"Cache-Control": "no-store", "X-Cache": "HIT",
+                                                                    "Access-Control-Allow-Origin": "*"})
         req = urllib.request.Request(BACKEND + "/api" + api + (("?" + consulta) if consulta else ""),
                                      data=corpo, method=self.command)
         for h in ("Content-Type", "Accept"):
@@ -306,8 +520,12 @@ class Porta(BaseHTTPRequestHandler):
             status, dados, tipo = e.code, e.read(), e.headers.get("Content-Type", "application/json")
         except (urllib.error.URLError, OSError):
             return self._json(502, {"erro": "o motor de cálculo não respondeu; tente de novo em instantes"})
-        extra = {"Cache-Control": "public, max-age=3600" if "/dados-abertos/" in api and status == 200 else "no-store",
-                 "Access-Control-Allow-Origin": "*"}
+        if self.command == "POST" and status == 200:
+            MEMORIA.guardar(chave, dados, tipo)
+        publico = self.command in ("GET", "HEAD") and status == 200
+        extra = {"Cache-Control": CACHE_API_GET if publico else "no-store", "Access-Control-Allow-Origin": "*"}
+        if self.command == "POST":
+            extra["X-Cache"] = "MISS"
         self._enviar(status, dados, tipo, extra)
 
     def do_OPTIONS(self):
@@ -346,17 +564,20 @@ def vigiar(motor: subprocess.Popen, servidor: ThreadingHTTPServer) -> None:
 
 
 def main() -> int:
-    global CONTA
+    global CONTA, USO
     danfse = subir_danfse()
     CONTA = montar_conta()
+    USO = montar_uso()
     motor = subir_motor()
-    servidor = ThreadingHTTPServer(("0.0.0.0", PORTA), Porta)
+    servidor = ServidorFila(("0.0.0.0", PORTA), Porta)
     servidor.daemon_threads = True
     signal.signal(signal.SIGTERM, lambda *_: threading.Thread(target=servidor.shutdown).start())
     if motor:
         threading.Thread(target=vigiar, args=(motor, servidor), daemon=True).start()
     sys.stderr.write(f"nota-aberta em :{PORTA}, motor em {BACKEND}\n")
     servidor.serve_forever()
+    if USO is not None:
+        USO.despejar()
     if danfse and danfse.poll() is None:
         danfse.terminate()
     if motor and motor.poll() is None:

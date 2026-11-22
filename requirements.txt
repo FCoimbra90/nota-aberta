@@ -1,3 +1,8 @@
-# Única dependência fora da biblioteca padrão: PKCS#12, X.509, AES-GCM e RSA do cofre, do certificado e da assinatura.
+# Fora da biblioteca padrão: cryptography (PKCS#12, X.509, AES-GCM e RSA do cofre, do certificado e da assinatura) e o DANFE.
 # O python3-cryptography do Ubuntu 24.04 é a 41, sem not_valid_after_utc (pedido desde a 42): por isso vem do PyPI.
 cryptography==50.0.1
+# DANFE (PDF da NF-e): a mesma biblioteca do emissor da casa (LGPL, usada como biblioteca). Dependências fixadas para o
+# scan de dependências não resolver versão antiga (Pillow 13.0.0 = 0 avisos no OSV em 20/10, como em apps/factory).
+brazilfiscalreport==1.4.0
+fpdf2==2.9.0
+pillow==13.0.0
