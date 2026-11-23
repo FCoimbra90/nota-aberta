@@ -253,7 +253,6 @@ async function carregar() {
     if (e.status === 401) { $("#fora").hidden = false; $("#dentro").hidden = true; return; }
     $("#fora").hidden = false; $("#fora").querySelector("p").textContent = e.message; return;
   }
-  const { planos } = await api("GET", "/conta/planos");
   $("#fora").hidden = true; $("#dentro").hidden = false;
   $("#quem").textContent = EU.usuario.email;
   const amb = $("#ambiente");
@@ -265,7 +264,7 @@ async function carregar() {
   fiscal.disabled = !EU.producao;
   if (!EU.producao) $('#f-emitir input[value="teste"]').checked = true;
   marcarAmbiente();
-  plano(EU, planos); empresas(EU); chaves(EU); nfeEmpresas(EU);
+  empresas(EU); chaves(EU); nfeEmpresas(EU);
 }
 
 $("#f-emitir").onsubmit = async (ev) => {

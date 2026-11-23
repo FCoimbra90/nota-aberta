@@ -145,6 +145,13 @@ class Conta:
             return Resultado(302, redirecionar=volta if volta in VOLTAS else "/painel.html",
                              cookies=[_cookie(COOKIE, self.c.emitir_sessao(u["id"]), 14 * 24 * 3600), _cookie(COOKIE_OAUTH, "", 0),
                                       _cookie(COOKIE_VOLTA, "", 0)])
+        if caminho == "/entrar/local" and m == "GET":
+            token = q.get("t", [""])[0]
+            if not self.c.usuario_da_sessao(token):
+                raise Erro(401, "sessao_invalida", "acesso local inválido ou vencido: rode o instalar-emissor.command de novo")
+            # Sem Secure: o painel roda em http://localhost (fora do Chrome, o Safari recusa cookie Secure em http).
+            return Resultado(302, redirecionar="/painel.html",
+                             cookies=[f"{COOKIE}={token}; Path=/; Max-Age={14 * 24 * 3600}; HttpOnly; SameSite=Lax"])
         if caminho == "/sair":
             return Resultado(302, redirecionar="/", cookies=[_cookie(COOKIE, "", 0)])
         if caminho == "/conta/planos" and m == "GET":

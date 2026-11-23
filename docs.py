@@ -76,7 +76,7 @@ def _config_json(base: str) -> str:
 def markdown(base: str) -> str:
     """/llms.txt: a mesma documentação em texto, para agentes de IA lerem."""
     linhas = [
-        "# Nota Aberta: API e MCP", "",
+        "# Emissor PBD: API e MCP", "",
         "> Emissor grátis de NFS-e nacional e NF-e (produto), com CBS e IBS da Reforma pelo motor oficial da Receita.",
         "", f"Base: {base}", "", "## MCP", "",
         f"- URL: {base}/mcp (Streamable HTTP: POST com JSON-RPC 2.0; abrir no navegador mostra esta documentação)",
@@ -128,11 +128,11 @@ def pagina(base: str) -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>API e MCP · Nota Aberta</title>
-<meta name="description" content="Documentação da API e do MCP da Nota Aberta: emitir NFS-e e NF-e e calcular CBS e IBS por código ou por agente de IA.">
+<title>API e MCP · Emissor PBD</title>
+<meta name="description" content="Documentação da API e do MCP do Emissor PBD: emitir NFS-e e NF-e e calcular CBS e IBS por código ou por agente de IA.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="{e(base)}/docs">
-<meta property="og:title" content="API e MCP da Nota Aberta">
+<meta property="og:title" content="API e MCP do Emissor PBD">
 <meta property="og:description" content="Emita NFS-e e NF-e e calcule CBS e IBS por código ou por agente de IA. Grátis.">
 <meta property="og:image" content="{e(base)}/img/oficina-1920.webp">
 <meta name="twitter:card" content="summary_large_image">
@@ -141,7 +141,7 @@ def pagina(base: str) -> str:
 </head>
 <body>
 <main class="docs">
-  <p><a href="/">Nota Aberta</a> · <a href="/painel.html">Painel</a> · <a href="/llms.txt">llms.txt</a></p>
+  <p><a href="/painel.html">Emissor PBD</a> · <a href="/painel.html">Painel</a> · <a href="/llms.txt">llms.txt</a></p>
   <h1>API e MCP</h1>
   <p>Tudo o que a tela faz, um sistema ou um agente de IA também faz: emitir, conferir, listar e cancelar NFS-e, emitir
   NF-e e calcular CBS e IBS no motor oficial da Receita. Grátis.</p>
@@ -187,8 +187,7 @@ def pagina(base: str) -> str:
   <p>O motor oficial da Receita Federal (MIT), sem alteração, atrás de um teto de pedidos por IP.</p>
   <div class="rolar">{tabela(CALCULADORA)}</div>
 
-  <p class="rodape-docs">Esta página é gerada do código do servidor: a lista de ferramentas é a mesma que o MCP expõe.
-  Código aberto (MIT) da <a href="https://genesisinnovation.io">Genesis Innovation</a>.</p>
+  <p class="rodape-docs">Esta página é gerada do código do servidor: a lista de ferramentas é a mesma que o MCP expõe.</p>
 </main>
 </body>
 </html>

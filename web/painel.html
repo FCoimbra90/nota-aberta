@@ -3,27 +3,24 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Painel Nota Aberta</title>
+<title>Emissor PBD</title>
 <meta name="robots" content="noindex">
 <link rel="stylesheet" href="estilo.css">
 <link rel="icon" href="icone.svg" type="image/svg+xml">
 </head>
 <body>
 <header class="barra">
-  <div class="caixa nav"><a class="marca" href="/">Nota Aberta</a>
+  <div class="caixa nav"><a class="marca" href="/painel.html">Emissor PBD</a>
     <span class="nav-links"><span id="quem"></span><a href="/calculadora.html">Calculadora</a><a href="/sair">Sair</a></span></div>
 </header>
 <main class="caixa">
   <p id="ambiente" class="faixa" hidden></p>
   <section id="fora" class="cartao" hidden>
     <h2>Entre para emitir</h2>
-    <p>Use a sua conta Google. Nenhuma senha nova.</p>
-    <a class="botao" href="/entrar/google">Entrar com Google</a>
+    <p>Dê duplo clique em <strong>instalar-emissor.command</strong> (pasta do projeto Emissor, no Drive): ele liga o emissor e abre este painel já com a sua sessão.</p>
   </section>
 
   <div id="dentro" hidden>
-    <section class="cartao" id="plano"></section>
-
     <section class="cartao">
       <h2>Emitir nota de serviço</h2>
       <form id="f-emitir" class="grade3">
