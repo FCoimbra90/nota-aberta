@@ -227,9 +227,38 @@ class Conta:
             if not linha or not linha[0]:
                 raise Erro(404, "nota_sem_xml", "nota não emitida ou sem o XML da NFS-e")
             return Resultado(200, bruto=danfse(linha[0], self.env), tipo="application/pdf")
+        if len(resto) == 3 and resto[0] == "notas" and resto[2] == "arquivar" and m == "POST":
+            return self._arquivar(u, eid, resto[1], self._json(corpo))
         if resto and resto[0] == "nfe":
             return self._nfe(m, u, eid, resto[1:], corpo)
         raise Erro(404, "rota_inexistente", "rota da empresa não existe")
+
+    # Nome do arquivo arquivado: só um nome de PDF, nunca um caminho (sem barra, sem começar por ponto).
+    NOME_ARQUIVO = re.compile(r"[0-9A-Za-zÀ-ÿ][0-9A-Za-zÀ-ÿ .,()_-]{0,119}\.pdf")
+
+    def _arquivar(self, u: dict, eid: str, nota_id: str, d: dict) -> Resultado:
+        """Versão pessoal: grava o PDF oficial de uma nota emitida na pasta montada em NOTA_ARQUIVO
+        (no Mac, só a pasta "NFs Emitidas"). Não sobrescreve arquivo existente sem "substituir": true."""
+        from pathlib import Path
+        pasta = self.env.get("NOTA_ARQUIVO", "")
+        if not pasta or not Path(pasta).is_dir():
+            raise Erro(503, "arquivo_desligado", "a pasta de arquivo não está ligada neste servidor (NOTA_ARQUIVO)")
+        nome = str(d.get("nome", "")).strip()
+        if not self.NOME_ARQUIVO.fullmatch(nome):
+            raise Erro(422, "nome_invalido", "informe só o nome do PDF, ex.: NF 2026.12.pdf (sem pastas)")
+        self.c.empresa(u["id"], eid)
+        linha = self.c.bd.execute("select nfse_xml from notas where id = ? and empresa_id = ? and status = 'emitida'",
+                                  (nota_id, eid)).fetchone()
+        if not linha or not linha[0]:
+            raise Erro(404, "nota_sem_xml", "nota não emitida ou sem o XML da NFS-e")
+        destino = Path(pasta) / nome
+        if destino.exists() and not d.get("substituir"):
+            raise Erro(409, "arquivo_existe", f"já existe {nome} na pasta; mande \"substituir\": true para trocar")
+        pdf = danfse(linha[0], self.env)
+        provisorio = destino.with_name("." + nome + ".parcial")
+        provisorio.write_bytes(pdf)
+        os.replace(provisorio, destino)
+        return Resultado(201, {"arquivo": nome, "bytes": len(pdf)})
 
     def _nfe(self, m: str, u: dict, eid: str, resto: list[str], corpo: bytes) -> Resultado:
         """NF-e de produto: /conta/empresas/<eid>/nfe[/cadastro | /<nota>/xml | /<nota>/pdf]."""

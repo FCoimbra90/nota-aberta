@@ -337,3 +337,23 @@ def test_mcp_editar_empresa_grava_im_e_regime_especial_pela_chave(app):
     assert st == 200 and "isError" not in r["result"]
     e = app["c"].empresa(app["u"]["id"], emp["id"])
     assert (e["inscricao_municipal"], e["regime_especial"]) == ("4321", "5")
+
+
+def test_versao_pessoal_arquiva_o_pdf_na_pasta_montada_so_com_nome_de_pdf_e_sem_sobrescrever(app, monkeypatch, tmp_path):
+    pasta = tmp_path / "NFs Emitidas"
+    pasta.mkdir()
+    monkeypatch.setitem(servidor.CONTA.env, "NOTA_ARQUIVO", str(pasta))
+    _, emp = _api(app, "POST", "/conta/empresas", {"cnpj": CNPJ, "razao": "Empresa", "municipio_ibge": 4205407})
+    _api(app, "POST", f"/conta/empresas/{emp['id']}/certificado", {"pfx_base64": base64.b64encode(fazer_pfx()).decode(), "senha": SENHA})
+    SefinFalsa.roteiro = [ok()]
+    _, nota = _api(app, "POST", f"/conta/empresas/{emp['id']}/notas", {"codigo_servico": "010101", "descricao": "S", "valor": "1"})
+    monkeypatch.setattr(conta_web, "danfse", lambda xml, env: b"%PDF-1.7 teste")
+    rota = f"/conta/empresas/{emp['id']}/notas/{nota['id']}/arquivar"
+    for ruim in ("../fora.pdf", "sub/NF.pdf", ".oculto.pdf", "NF.txt", ""):
+        assert _api(app, "POST", rota, {"nome": ruim})[0] == 422, ruim
+    st, r = _api(app, "POST", rota, {"nome": "NF 2026.12.pdf"})
+    assert st == 201 and (pasta / "NF 2026.12.pdf").read_bytes() == b"%PDF-1.7 teste"
+    assert _api(app, "POST", rota, {"nome": "NF 2026.12.pdf"})[0] == 409
+    assert _api(app, "POST", rota, {"nome": "NF 2026.12.pdf", "substituir": True})[0] == 201
+    assert sorted(p.name for p in pasta.iterdir()) == ["NF 2026.12.pdf"]
+    assert _api(app, "POST", f"/conta/empresas/{emp['id']}/notas/nota_inexistente/arquivar", {"nome": "x.pdf"})[0] == 404
